@@ -1,0 +1,31 @@
+mode: Legal Contract Analysis
+metadata:
+  required:
+    - title
+    - case_number
+    - date
+    - attorney
+  optional:
+    - client
+    - jurisdiction
+    - contract_type
+    - parties
+sections:
+  - title: Executive Summary
+    hint: High-level overview of contract terms, key findings, and recommendations.
+  - title: Parties & Background
+    hint: Identification of contracting parties, their roles, and relevant background information.
+  - title: Key Terms Analysis
+    hint: Detailed analysis of material terms, obligations, rights, and conditions.
+  - title: Risk Assessment
+    hint: Identification of legal risks, liability exposure, and potential disputes.
+  - title: Compliance Review
+    hint: Analysis of regulatory compliance, industry standards, and legal requirements.
+  - title: Financial Implications
+    hint: Payment terms, penalties, termination costs, and financial obligations.
+  - title: Dispute Resolution
+    hint: Arbitration clauses, jurisdiction, governing law, and dispute mechanisms.
+  - title: Recommendations
+    hint: Legal recommendations, suggested amendments, and action items.
+  - title: Appendices
+    hint: Supporting documents, relevant case law, and reference materials.

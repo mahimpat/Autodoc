@@ -1,0 +1,25 @@
+mode: API/Library Docs
+metadata:
+  required:
+    - title
+    - authors
+    - date
+  optional:
+    - affiliations
+    - keywords
+    - abstract
+sections:
+  - title: Overview
+    hint: What this library/API does; key concepts.
+  - title: Quickstart
+    hint: Install, minimal example.
+  - title: Core Concepts
+    hint: Terminology, lifecycle, patterns.
+  - title: API Reference
+    hint: Functions/classes; params/returns/errors.
+  - title: Examples
+    hint: End-to-end snippets and use cases.
+  - title: Versioning & Changelog
+    hint: Semver policy, migration notes.
+  - title: License & Credits
+    hint: License, authors, third-party deps.

@@ -1,0 +1,31 @@
+mode: Financial Risk Assessment
+metadata:
+  required:
+    - title
+    - assessment_date
+    - risk_analyst
+    - entity_name
+  optional:
+    - portfolio
+    - asset_class
+    - reporting_period
+    - regulatory_framework
+sections:
+  - title: Executive Summary
+    hint: Key risk findings, overall risk rating, and strategic recommendations.
+  - title: Risk Framework
+    hint: Risk methodology, assessment criteria, risk taxonomy, and measurement approach.
+  - title: Market Risk Analysis
+    hint: Market exposures, volatility analysis, scenario testing, and sensitivity analysis.
+  - title: Credit Risk Evaluation
+    hint: Counterparty risk, default probabilities, concentration risk, and credit quality.
+  - title: Operational Risk Assessment
+    hint: Process risks, system failures, human error, and operational controls.
+  - title: Liquidity Risk Analysis
+    hint: Funding risk, liquidity gaps, stress scenarios, and contingency planning.
+  - title: Regulatory & Compliance Risk
+    hint: Regulatory requirements, compliance gaps, and regulatory change impact.
+  - title: Risk Mitigation Strategies
+    hint: Risk controls, hedging strategies, diversification, and risk transfer mechanisms.
+  - title: Monitoring & Reporting
+    hint: Risk metrics, KRIs, reporting frameworks, and ongoing monitoring procedures.

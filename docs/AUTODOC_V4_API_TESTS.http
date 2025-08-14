@@ -1,0 +1,42 @@
+### VS Code REST Client friendly tests
+@base=http://localhost:8000
+
+### 1) Health
+GET {{base}}/health
+
+### 2) Register (choose your email)
+POST {{base}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "dev@example.com",
+  "password": "secret123"
+}
+
+### 3) Who am I? (should reflect the cookie from register/login)
+GET {{base}}/auth/me
+
+### 4) Logout
+POST {{base}}/auth/logout
+
+### 5) Login
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "dev@example.com",
+  "password": "secret123"
+}
+
+### 6) List my documents
+GET {{base}}/documents
+
+### 7) Upload a file
+POST {{base}}/ingest/upload
+Content-Type: multipart/form-data
+
+# (Use your REST client to attach a file field named 'files')
+
+### 8) Stream generate (SSE)
+# Open this in a browser/new tab to watch server-sent events
+GET {{base}}/ingest/stream_generate?doc_id=1

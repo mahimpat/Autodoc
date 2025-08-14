@@ -1,0 +1,31 @@
+mode: Investment Analysis Report
+metadata:
+  required:
+    - title
+    - investment_target
+    - analyst
+    - analysis_date
+  optional:
+    - fund_name
+    - asset_class
+    - investment_amount
+    - client
+sections:
+  - title: Investment Thesis
+    hint: Investment rationale, key value drivers, and expected returns.
+  - title: Company/Asset Overview
+    hint: Business description, market position, competitive landscape, and key metrics.
+  - title: Financial Analysis
+    hint: Financial statements analysis, profitability, cash flows, and financial health.
+  - title: Valuation Analysis
+    hint: Valuation methodologies, DCF analysis, comparable company analysis, and fair value.
+  - title: Market & Industry Analysis
+    hint: Industry dynamics, market trends, growth prospects, and competitive environment.
+  - title: Risk Analysis
+    hint: Investment risks, market risks, company-specific risks, and risk mitigation.
+  - title: ESG Considerations
+    hint: Environmental, social, and governance factors and their impact on investment.
+  - title: Transaction Structure
+    hint: Deal terms, financing structure, exit strategies, and transaction mechanics.
+  - title: Investment Recommendation
+    hint: Investment decision, target allocation, timeline, and monitoring requirements.

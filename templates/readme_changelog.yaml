@@ -1,0 +1,23 @@
+mode: Readme/Changelog
+metadata:
+  required:
+    - title
+    - authors
+    - date
+  optional:
+    - affiliations
+    - keywords
+    - abstract
+sections:
+  - title: Introduction
+    hint: Project purpose and highlights.
+  - title: Installation
+    hint: Dependencies and setup steps.
+  - title: Usage
+    hint: Common commands or workflows.
+  - title: Configuration
+    hint: Env vars and config files.
+  - title: Changelog
+    hint: Structured list of releases and changes.
+  - title: Contributing
+    hint: How to contribute; code style.

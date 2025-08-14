@@ -1,0 +1,32 @@
+mode: Legal Case Brief
+metadata:
+  required:
+    - title
+    - case_name
+    - court
+    - date
+    - attorney
+  optional:
+    - client
+    - case_number
+    - jurisdiction
+    - case_type
+sections:
+  - title: Case Overview
+    hint: Case caption, parties, procedural posture, and key facts summary.
+  - title: Statement of Facts
+    hint: Chronological presentation of relevant facts and evidence.
+  - title: Procedural History
+    hint: Prior proceedings, motions filed, and judicial decisions to date.
+  - title: Legal Issues
+    hint: Key legal questions, statutes involved, and applicable standards.
+  - title: Arguments & Analysis
+    hint: Legal arguments, case law analysis, and statutory interpretation.
+  - title: Precedent Review
+    hint: Relevant case law, distinguishing factors, and binding authority.
+  - title: Strategic Considerations
+    hint: Litigation strategy, settlement options, and tactical decisions.
+  - title: Conclusion & Next Steps
+    hint: Case assessment, likely outcomes, and recommended actions.
+  - title: Citation Index
+    hint: Referenced cases, statutes, regulations, and legal authorities.

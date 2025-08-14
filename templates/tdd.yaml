@@ -1,0 +1,31 @@
+mode: Technical Design Doc
+metadata:
+  required:
+    - title
+    - authors
+    - date
+  optional:
+    - affiliations
+    - keywords
+    - abstract
+sections:
+  - title: Overview
+    hint: One-pager: problem, goals, scope, non-goals.
+  - title: Architecture
+    hint: Components, sequence diagrams, data flows.
+  - title: Interfaces & APIs
+    hint: Endpoints, schemas, contracts, rate limits.
+  - title: Data Model
+    hint: Entities, relationships, retention, privacy.
+  - title: Scalability & Performance
+    hint: SLAs, capacity planning, bottlenecks.
+  - title: Security & Compliance
+    hint: Threat model, authN/Z, secrets, audits.
+  - title: Testing & Observability
+    hint: Unit/integration, chaos, metrics, tracing.
+  - title: Deployment & Rollout
+    hint: Environments, feature flags, migrations.
+  - title: Risks & Alternatives
+    hint: Trade-offs, fallbacks, cut scope.
+  - title: Changelog
+    hint: Notable changes and decisions over time.

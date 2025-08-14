@@ -1,0 +1,31 @@
+mode: Legal Compliance Audit
+metadata:
+  required:
+    - title
+    - organization
+    - audit_date
+    - lead_auditor
+  optional:
+    - department
+    - compliance_framework
+    - audit_scope
+    - stakeholders
+sections:
+  - title: Audit Scope & Objectives
+    hint: Audit purpose, scope boundaries, regulatory frameworks, and objectives.
+  - title: Regulatory Framework
+    hint: Applicable laws, regulations, industry standards, and compliance requirements.
+  - title: Current State Assessment
+    hint: Existing policies, procedures, controls, and compliance measures.
+  - title: Gap Analysis
+    hint: Identified compliance gaps, deficiencies, and areas of non-conformance.
+  - title: Risk Assessment
+    hint: Compliance risks, potential penalties, and impact analysis.
+  - title: Control Effectiveness
+    hint: Evaluation of existing controls, their design, and operational effectiveness.
+  - title: Recommendations
+    hint: Remediation actions, policy updates, and process improvements.
+  - title: Implementation Plan
+    hint: Timeline, responsibilities, resources, and monitoring mechanisms.
+  - title: Appendices
+    hint: Supporting evidence, regulatory references, and detailed findings.

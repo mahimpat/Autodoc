@@ -1,0 +1,31 @@
+mode: Financial Audit Report
+metadata:
+  required:
+    - title
+    - entity_name
+    - audit_period
+    - lead_auditor
+  optional:
+    - audit_firm
+    - engagement_partner
+    - audit_type
+    - materiality_threshold
+sections:
+  - title: Audit Opinion
+    hint: Auditor's opinion on financial statements, qualifications, and basis for opinion.
+  - title: Audit Scope & Approach
+    hint: Audit objectives, scope limitations, materiality, and audit methodology.
+  - title: Key Audit Matters
+    hint: Significant risks, complex areas, and matters of audit significance.
+  - title: Financial Statement Review
+    hint: Analysis of financial statements, accounting policies, and significant estimates.
+  - title: Internal Control Assessment
+    hint: Internal control evaluation, control deficiencies, and management letter points.
+  - title: Audit Findings
+    hint: Audit exceptions, misstatements, control weaknesses, and compliance issues.
+  - title: Management Responses
+    hint: Management's responses to findings, corrective actions, and implementation timelines.
+  - title: Recommendations
+    hint: Audit recommendations, process improvements, and control enhancements.
+  - title: Regulatory Compliance
+    hint: Compliance with accounting standards, regulations, and reporting requirements.

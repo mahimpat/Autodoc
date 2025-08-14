@@ -1,0 +1,33 @@
+mode: Clinical Study Report
+metadata:
+  required:
+    - title
+    - study_id
+    - principal_investigator
+    - date
+  optional:
+    - sponsor
+    - protocol_number
+    - study_phase
+    - indication
+sections:
+  - title: Study Synopsis
+    hint: Brief overview of study objectives, design, population, and key findings.
+  - title: Study Objectives
+    hint: Primary and secondary endpoints, hypotheses, and research questions.
+  - title: Study Design & Methods
+    hint: Study design, randomization, blinding, inclusion/exclusion criteria.
+  - title: Patient Population
+    hint: Demographics, baseline characteristics, enrollment, and disposition.
+  - title: Treatment & Procedures
+    hint: Study treatments, dosing, administration, and protocol procedures.
+  - title: Safety Analysis
+    hint: Adverse events, serious adverse events, safety findings, and tolerability.
+  - title: Efficacy Results
+    hint: Primary and secondary endpoint results, statistical analysis, and outcomes.
+  - title: Discussion & Interpretation
+    hint: Clinical significance, limitations, comparisons with existing literature.
+  - title: Conclusions
+    hint: Study conclusions, clinical implications, and future research directions.
+  - title: Appendices
+    hint: Statistical methods, data listings, and supplementary analyses.

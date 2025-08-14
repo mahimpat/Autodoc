@@ -1,0 +1,12 @@
+node_modules/
+.next/
+.env
+_local_store/
+uploads/
+__pycache__/
+*.pyc
+dist/
+.venv/
+db_data/
+minio_data/
+ollama_data/

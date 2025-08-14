@@ -1,0 +1,27 @@
+mode: Experiment Record
+metadata:
+  required:
+    - title
+    - authors
+    - date
+  optional:
+    - affiliations
+    - keywords
+    - abstract
+sections:
+  - title: Objective
+    hint: What are you trying to validate/measure?
+  - title: Setup
+    hint: Hardware, software, versions, topology, seeds.
+  - title: Procedure
+    hint: Step-by-step; parameters and durations.
+  - title: Observations
+    hint: Raw notes, logs, anomalies.
+  - title: Results
+    hint: Metrics with units; charts/tables.
+  - title: Analysis
+    hint: Interpretation; compare to baseline.
+  - title: Conclusion
+    hint: Did it work? Next steps.
+  - title: Artifacts
+    hint: Links to code, configs, datasets.

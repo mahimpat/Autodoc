@@ -1,0 +1,31 @@
+mode: Medical Case Report
+metadata:
+  required:
+    - title
+    - patient_id
+    - attending_physician
+    - date
+  optional:
+    - hospital
+    - department
+    - specialty
+    - diagnosis_codes
+sections:
+  - title: Case Presentation
+    hint: Brief case summary, key clinical features, and diagnostic challenges.
+  - title: Patient History
+    hint: Medical history, family history, social history, and current medications.
+  - title: Clinical Examination
+    hint: Physical examination findings, vital signs, and clinical assessments.
+  - title: Diagnostic Workup
+    hint: Laboratory results, imaging studies, diagnostic procedures, and tests.
+  - title: Treatment & Management
+    hint: Treatment plan, interventions, medications, and therapeutic approaches.
+  - title: Clinical Course
+    hint: Disease progression, response to treatment, complications, and outcomes.
+  - title: Discussion
+    hint: Clinical reasoning, differential diagnosis, literature review, and learning points.
+  - title: Follow-up & Prognosis
+    hint: Long-term outcomes, monitoring plan, and prognostic considerations.
+  - title: Lessons Learned
+    hint: Clinical insights, educational value, and implications for practice.

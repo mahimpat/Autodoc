@@ -1,0 +1,29 @@
+mode: Research Report
+metadata:
+  required:
+    - title
+    - authors
+    - date
+  optional:
+    - affiliations
+    - keywords
+    - abstract
+sections:
+  - title: Title & Abstract
+    hint: Concise summary, problem, approach, key results.
+  - title: Introduction
+    hint: Context, gap, contributions, hypotheses.
+  - title: Related Work
+    hint: Position vs prior literature; add citations.
+  - title: Methods
+    hint: Data, setups, algorithms, parameters, reproducibility details.
+  - title: Results
+    hint: Tables/figures; statistical tests and error bars.
+  - title: Discussion
+    hint: Interpretation, limitations, threats to validity.
+  - title: Conclusion & Future Work
+    hint: Key takeaways and next steps.
+  - title: References
+    hint: Bibliography (BibTeX/DOI).
+  - title: Appendix
+    hint: Extended proofs, configs, or ablations.

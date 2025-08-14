@@ -1,0 +1,31 @@
+mode: Medical Protocol
+metadata:
+  required:
+    - title
+    - protocol_version
+    - effective_date
+    - author
+  optional:
+    - department
+    - specialty
+    - approval_authority
+    - review_date
+sections:
+  - title: Protocol Overview
+    hint: Purpose, scope, target population, and clinical indication.
+  - title: Clinical Background
+    hint: Medical rationale, evidence base, and standard of care context.
+  - title: Eligibility Criteria
+    hint: Inclusion criteria, exclusion criteria, and patient selection guidelines.
+  - title: Treatment Protocol
+    hint: Step-by-step procedures, treatment algorithms, and clinical pathways.
+  - title: Monitoring & Assessment
+    hint: Monitoring requirements, assessment schedules, and evaluation criteria.
+  - title: Safety Considerations
+    hint: Risk factors, contraindications, adverse event management, and safety monitoring.
+  - title: Quality Measures
+    hint: Performance indicators, outcome measures, and quality assurance requirements.
+  - title: Implementation Guidelines
+    hint: Training requirements, resource needs, and implementation considerations.
+  - title: References & Evidence
+    hint: Supporting literature, clinical guidelines, and evidence sources.
