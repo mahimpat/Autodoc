@@ -43,15 +43,14 @@ def _get_workspace_content(user: User, db: Session) -> List[str]:
                 print(f"DEBUG WORKSPACE: Found {len(workspace_snippets)} shared snippets in workspace {current_workspace.name}")
                 
                 if workspace_snippets:
-                    # Get the most recent upload path from workspace
-                    latest_path = workspace_snippets[0].path
-                    print(f"DEBUG WORKSPACE: Latest workspace upload path: {latest_path}")
+                    # Use recent workspace snippets with reasonable limit for LLM context
+                    max_snippets = int(os.getenv("MAX_CONTENT_SNIPPETS", "300"))  # Configurable limit
+                    limited_snippets = workspace_snippets[:max_snippets]
+                    print(f"DEBUG WORKSPACE: Using {len(limited_snippets)} of {len(workspace_snippets)} shared workspace snippets")
                     
-                    # Filter to only use snippets from the most recent workspace upload
-                    latest_workspace_snippets = [s for s in workspace_snippets if s.path == latest_path]
-                    user_source_texts = [snippet.text for snippet in latest_workspace_snippets if snippet.text and snippet.text.strip()]
+                    user_source_texts = [snippet.text for snippet in limited_snippets if snippet.text and snippet.text.strip()]
                     
-                    print(f"DEBUG WORKSPACE: Using {len(user_source_texts)} snippets from latest workspace upload")
+                    print(f"DEBUG WORKSPACE: Using {len(user_source_texts)} snippets from all workspace uploads")
         
         # Fallback to user's personal content if no workspace content
         if not user_source_texts:
@@ -60,15 +59,14 @@ def _get_workspace_content(user: User, db: Session) -> List[str]:
             print(f"DEBUG FALLBACK: Found {len(all_user_snippets)} personal snippets")
             
             if all_user_snippets:
-                # Get the most recent upload path from personal content
-                latest_path = all_user_snippets[0].path
-                print(f"DEBUG FALLBACK: Latest personal upload path: {latest_path}")
+                # Use recent personal snippets with reasonable limit for LLM context
+                max_snippets = int(os.getenv("MAX_CONTENT_SNIPPETS", "300"))  # Configurable limit
+                limited_snippets = all_user_snippets[:max_snippets]
+                print(f"DEBUG FALLBACK: Using {len(limited_snippets)} of {len(all_user_snippets)} personal snippets")
                 
-                # Filter to only use snippets from the most recent personal upload
-                latest_snippets = [s for s in all_user_snippets if s.path == latest_path]
-                user_source_texts = [snippet.text for snippet in latest_snippets if snippet.text and snippet.text.strip()]
+                user_source_texts = [snippet.text for snippet in limited_snippets if snippet.text and snippet.text.strip()]
                 
-                print(f"DEBUG FALLBACK: Using {len(user_source_texts)} snippets from latest personal upload")
+                print(f"DEBUG FALLBACK: Using {len(user_source_texts)} snippets from all personal uploads")
     
     except Exception as e:
         print(f"DEBUG ERROR: Error fetching workspace content: {e}")
@@ -385,7 +383,19 @@ async def get_queue_stats(user: User = Depends(get_current_user)):
 
 # Keep the old endpoint for backward compatibility but mark as deprecated
 @router.get("/stream_generate")
-def stream_generate_legacy(project: str, title: str, template: str, description: str = "", model: str | None = None, system: str | None = None, request: Request = None, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def stream_generate_legacy(
+    project: str, 
+    title: str, 
+    template: str = None, 
+    smart_template_id: str = None,
+    template_variables: str = None,
+    description: str = "", 
+    model: str | None = None, 
+    system: str | None = None, 
+    request: Request = None, 
+    user: User = Depends(get_current_user), 
+    db: Session = Depends(get_db)
+):
     # Extract user_id before entering generator scope to avoid SQLAlchemy DetachedInstanceError
     user_id = user.id
     
@@ -410,11 +420,41 @@ def stream_generate_legacy(project: str, title: str, template: str, description:
     )
     db.add(d); db.commit(); db.refresh(d)
 
-    try:
-        tpl = load_template(template)
-        outline = seed_empty_outline(tpl, title)
-    except Exception:
-        outline = {"title": title, "mode": "technical document", "sections": [{"heading": "Introduction"}, {"heading": "Method"}, {"heading": "Conclusion"}]}
+    # Handle smart templates vs classic templates
+    if smart_template_id:
+        # Load smart template from database
+        smart_template = db.query(Template).filter(Template.id == smart_template_id).first()
+        if smart_template:
+            template_data = smart_template.template_data
+            mode = template_data.get("mode", "Smart Template Document")
+            headings = [section.get("title") for section in template_data.get("sections", []) if section.get("title")]
+            outline = {
+                "title": title,
+                "mode": mode,
+                "sections": [{"heading": heading} for heading in headings]
+            }
+            
+            # Parse template variables if provided
+            parsed_variables = {}
+            if template_variables:
+                try:
+                    import json
+                    parsed_variables = json.loads(template_variables)
+                    print(f"DEBUG TEMPLATE: Using template variables: {parsed_variables}")
+                except json.JSONDecodeError:
+                    print(f"DEBUG TEMPLATE: Failed to parse template variables: {template_variables}")
+        else:
+            raise HTTPException(status_code=404, detail="Smart template not found")
+    elif template:
+        # Load classic YAML template
+        try:
+            tpl = load_template(template)
+            outline = seed_empty_outline(tpl, title)
+        except Exception:
+            outline = {"title": title, "mode": "technical document", "sections": [{"heading": "Introduction"}, {"heading": "Method"}, {"heading": "Conclusion"}]}
+    else:
+        raise HTTPException(status_code=400, detail="Either template or smart_template_id must be provided")
+    
     mode = outline.get("mode", "technical document")
     headings = [s.get("heading") for s in outline.get("sections", []) if s.get("heading")]
 

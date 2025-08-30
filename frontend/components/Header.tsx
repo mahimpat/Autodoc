@@ -110,6 +110,7 @@ export default function Header() {
           <UsageMeter />
           <Link href="/dashboard" className="btn btn-ghost">Dashboard</Link>
           <Link href="/studio" className="btn btn-ghost">Studio</Link>
+          <Link href="/templates" className="btn btn-ghost">Templates</Link>
           <Link href="/pricing" className="btn btn-ghost">Pricing</Link>
           <Link href="/settings/billing" className="btn">Billing</Link>
           <CommandMenu />

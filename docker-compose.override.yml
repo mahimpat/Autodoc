@@ -1,6 +1,4 @@
 # Development overrides for hot reloading
-version: '3.8'
-
 services:
   api:
     volumes:

@@ -25,6 +25,45 @@ docker compose up -d
 docker compose exec ollama ollama pull mistral:7b
 ```
 
+### GPU Setup for WSL2
+
+To enable GPU acceleration for Ollama on WSL2:
+
+1. **Install NVIDIA Container Toolkit in WSL2:**
+```bash
+# Add NVIDIA GPG key and repository
+distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | \
+    sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+    sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+# Update and install
+sudo apt-get update
+sudo apt-get install -y nvidia-container-toolkit
+
+# Configure Docker runtime
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
+```
+
+2. **Verify GPU is available in containers:**
+```bash
+docker run --rm --gpus all nvidia/cuda:11.8-base-ubuntu20.04 nvidia-smi
+```
+
+3. **Start services with GPU support:**
+```bash
+docker compose up -d
+```
+
+4. **Verify Ollama is using GPU:**
+```bash
+docker compose exec ollama nvidia-smi
+```
+
+The Ollama service is already configured to use all available GPUs. You should see significant performance improvements for model inference.
+
 ## Architecture Overview
 
 This is a full-stack document generation application with authentication and billing features.

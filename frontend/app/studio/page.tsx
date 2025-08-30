@@ -24,7 +24,8 @@ import {
   BanknotesIcon,
   MagnifyingGlassIcon,
   UsersIcon,
-  BuildingLibraryIcon
+  BuildingLibraryIcon,
+  StarIcon
 } from '@heroicons/react/24/outline';
 import { Button } from '../../components/ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
@@ -35,7 +36,6 @@ import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
 import { API_BASE } from '../../lib/api';
 import { SSEStream } from '../../lib/sse';
-import { WorkspaceCard } from '../../components/WorkspaceCard';
 import Header from '../../components/Header';
 import { EmptyState } from '../../components/EmptyState';
 import { useWorkspace } from '../../lib/workspace-context';
@@ -256,6 +256,10 @@ export default function Studio() {
   const [activeTab, setActiveTab] = useState<TabType>('generate');
   const [selectedCategory, setSelectedCategory] = useState('uploaded');
   const [selectedTemplate, setSelectedTemplate] = useState(templateCategories.uploaded[0]);
+  const [smartTemplates, setSmartTemplates] = useState<any[]>([]);
+  const [selectedSmartTemplate, setSelectedSmartTemplate] = useState<any>(null);
+  const [showSmartTemplates, setShowSmartTemplates] = useState(false);
+  const [templateVariables, setTemplateVariables] = useState<{[key: string]: any}>({});
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
@@ -297,7 +301,66 @@ export default function Studio() {
         console.error('Failed to load models:', error);
       }
     };
+    
+    const loadSmartTemplates = async () => {
+      try {
+        // Load user's templates (private + organization + public)
+        const [privateResponse, orgResponse, publicResponse] = await Promise.all([
+          fetch(`${API_BASE}/templates/search?visibility=private&limit=20`, { credentials: 'include' }),
+          fetch(`${API_BASE}/templates/search?visibility=organization&limit=20`, { credentials: 'include' }),
+          fetch(`${API_BASE}/templates/search?visibility=public&limit=10`, { credentials: 'include' })
+        ]);
+        
+        const allTemplates = [];
+        
+        if (privateResponse.ok) {
+          const privateTemplates = await privateResponse.json();
+          allTemplates.push(...privateTemplates);
+        }
+        
+        if (orgResponse.ok) {
+          const orgTemplates = await orgResponse.json();
+          allTemplates.push(...orgTemplates);
+        }
+        
+        if (publicResponse.ok) {
+          const publicTemplates = await publicResponse.json();
+          allTemplates.push(...publicTemplates);
+        }
+        
+        // Remove duplicates and sort by created date
+        const uniqueTemplates = allTemplates.filter((template, index, self) => 
+          index === self.findIndex(t => t.id === template.id)
+        ).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        
+        setSmartTemplates(uniqueTemplates);
+        console.log(`Loaded ${uniqueTemplates.length} smart templates`);
+      } catch (error) {
+        console.error('Failed to load smart templates:', error);
+      }
+    };
+
     loadModels();
+    loadSmartTemplates();
+    
+    // Check for smart_templates query parameter
+    const searchParams = new URLSearchParams(window.location.search);
+    if (searchParams.get('smart_templates') === 'true') {
+      setShowSmartTemplates(true);
+      // Clean up the URL
+      window.history.replaceState({}, '', '/studio');
+    }
+  }, []);
+
+  // Refresh templates when window regains focus (user returns from template creation)
+  useEffect(() => {
+    const handleFocus = () => {
+      console.log('Window focused, refreshing smart templates');
+      loadSmartTemplates();
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
   }, []);
 
   // Analyze content when files are uploaded
@@ -572,14 +635,25 @@ export default function Studio() {
     const url = new URL(`${API_BASE}/ingest/stream_generate`);
     url.searchParams.set('project', 'default');
     url.searchParams.set('title', title);
-    url.searchParams.set('template', selectedTemplate.id);
+    // Use smart template if selected, otherwise use classic template
+    if (selectedSmartTemplate) {
+      url.searchParams.set('smart_template_id', selectedSmartTemplate.id);
+      // Add template variables if any
+      if (Object.keys(templateVariables).length > 0) {
+        url.searchParams.set('template_variables', JSON.stringify(templateVariables));
+      }
+    } else {
+      url.searchParams.set('template', selectedTemplate.id);
+    }
     if (description) url.searchParams.set('description', description);
     if (model) url.searchParams.set('model', model);
     if (systemPrompt) url.searchParams.set('system', systemPrompt);
 
     let startTime = Date.now();
     let tokenCount = 0;
-    let totalSections = selectedTemplate.sections.length;
+    let totalSections = selectedSmartTemplate ? 
+      selectedSmartTemplate.template_data.sections.length : 
+      selectedTemplate.sections.length;
     let completedSections = 0;
 
     const stream = new SSEStream(url.toString(), (event) => {
@@ -718,10 +792,6 @@ export default function Studio() {
             Transform your ideas into beautiful documentation with AI-powered generation and premium templates
           </p>
         </div>
-        {/* Workspace Section */}
-        <div className="space-y-6">
-          <WorkspaceCard workspace={currentWorkspace || undefined} isLoading={workspaceLoading} />
-        </div>
 
         {/* Tab Navigation */}
         <div className="flex space-x-2 bg-card/60 p-3 rounded-2xl border border-border backdrop-blur-xl shadow-2xl animate-scale-in">
@@ -782,10 +852,97 @@ export default function Studio() {
                   Choose Template
                 </CardTitle>
                 <CardDescription className="text-muted-foreground">
-                  Select industry and document type
+                  Select template type and document format
                 </CardDescription>
+                <div className="flex items-center gap-2 mt-4">
+                  <Button
+                    variant={showSmartTemplates ? "outline" : "default"}
+                    size="sm"
+                    onClick={() => {
+                      setShowSmartTemplates(false);
+                      setSelectedSmartTemplate(null);
+                    }}
+                  >
+                    Classic Templates
+                  </Button>
+                  <Button
+                    variant={showSmartTemplates ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setShowSmartTemplates(true)}
+                  >
+                    <SparklesIcon className="w-4 h-4 mr-2" />
+                    Smart Templates ({smartTemplates.length})
+                  </Button>
+                  {showSmartTemplates && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => loadSmartTemplates()}
+                      className="ml-2"
+                    >
+                      🔄 Refresh
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
+                {showSmartTemplates ? (
+                  /* Smart Templates Selection */
+                  <div className="space-y-4">
+                    {smartTemplates.length === 0 ? (
+                      <div className="text-center py-8 text-slate-400">
+                        <SparklesIcon className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                        <p>No smart templates available</p>
+                        <p className="text-sm">Create your first smart template to get started</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3 max-h-80 overflow-y-auto">
+                        {smartTemplates.map((template) => (
+                          <div
+                            key={template.id}
+                            className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                              selectedSmartTemplate?.id === template.id
+                                ? 'border-blue-500 bg-blue-500/10'
+                                : 'border-slate-600 hover:border-slate-500'
+                            }`}
+                            onClick={() => setSelectedSmartTemplate(template)}
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-medium text-slate-100 mb-1">
+                                  {template.name}
+                                </h3>
+                                <p className="text-sm text-slate-400 mb-2">
+                                  {template.description}
+                                </p>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {template.tags.slice(0, 3).map((tag: string, index: number) => (
+                                    <Badge key={index} variant="secondary" size="sm">
+                                      {tag}
+                                    </Badge>
+                                  ))}
+                                  {template.avg_rating > 0 && (
+                                    <div className="flex items-center gap-1">
+                                      <StarIcon className="w-3 h-3 text-yellow-400" />
+                                      <span className="text-xs text-slate-400">
+                                        {template.avg_rating.toFixed(1)}
+                                      </span>
+                                    </div>
+                                  )}
+                                  <span className="text-xs text-slate-500">
+                                    {template.total_uses} uses
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* Classic Templates Selection */
+                  <>
                 {/* Category Selection */}
                 <div>
                   <label className="block text-sm font-medium mb-2">Template Category</label>
@@ -856,6 +1013,8 @@ export default function Studio() {
                     ))}
                   </div>
                 </div>
+                  </>
+                )}
               </CardContent>
             </Card>
 
@@ -966,15 +1125,81 @@ export default function Studio() {
                   />
                 </div>
 
+                {/* Template Variables (Smart Templates Only) */}
+                {showSmartTemplates && selectedSmartTemplate && selectedSmartTemplate.variables && selectedSmartTemplate.variables.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Template Variables</label>
+                    <div className="space-y-3">
+                      {selectedSmartTemplate.variables
+                        .sort((a: any, b: any) => a.order_index - b.order_index)
+                        .map((variable: any) => (
+                        <div key={variable.id}>
+                          <label className="block text-sm font-medium mb-1">
+                            {variable.name}
+                            {variable.required && <span className="text-red-500 ml-1">*</span>}
+                          </label>
+                          {variable.description && (
+                            <p className="text-xs text-gray-500 mb-2">{variable.description}</p>
+                          )}
+                          {variable.type === 'textarea' ? (
+                            <textarea
+                              value={templateVariables[variable.name] || variable.default_value || ''}
+                              onChange={(e) => setTemplateVariables(prev => ({
+                                ...prev,
+                                [variable.name]: e.target.value
+                              }))}
+                              placeholder={variable.placeholder || `Enter ${variable.name}`}
+                              className="w-full border border-white/40 dark:border-white/10 rounded-xl px-3 py-2 bg-white/70 dark:bg-white/5 backdrop-blur-md focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
+                              rows={2}
+                            />
+                          ) : variable.type === 'boolean' ? (
+                            <label className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={templateVariables[variable.name] === 'true' || templateVariables[variable.name] === true}
+                                onChange={(e) => setTemplateVariables(prev => ({
+                                  ...prev,
+                                  [variable.name]: e.target.checked
+                                }))}
+                                className="rounded"
+                              />
+                              <span className="text-sm">{variable.placeholder || `Enable ${variable.name}`}</span>
+                            </label>
+                          ) : (
+                            <Input
+                              type={variable.type === 'email' ? 'email' : variable.type === 'url' ? 'url' : variable.type === 'number' ? 'number' : 'text'}
+                              value={templateVariables[variable.name] || variable.default_value || ''}
+                              onChange={(e) => setTemplateVariables(prev => ({
+                                ...prev,
+                                [variable.name]: e.target.value
+                              }))}
+                              placeholder={variable.placeholder || `Enter ${variable.name}`}
+                              className="border border-white/40 dark:border-white/10 rounded-xl bg-white/70 dark:bg-white/5 backdrop-blur-md focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
+                            />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Template Sections Preview */}
                 <div>
                   <label className="block text-sm font-medium mb-2">Document Structure</label>
                   <div className="flex flex-wrap gap-2">
-                    {selectedTemplate.sections.map((section) => (
-                      <Badge key={section} variant="outline">
-                        {section}
-                      </Badge>
-                    ))}
+                    {showSmartTemplates && selectedSmartTemplate ? (
+                      selectedSmartTemplate.template_data.sections.map((section: any, index: number) => (
+                        <Badge key={index} variant="outline">
+                          {section.title}
+                        </Badge>
+                      ))
+                    ) : (
+                      selectedTemplate.sections.map((section) => (
+                        <Badge key={section} variant="outline">
+                          {section}
+                        </Badge>
+                      ))
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -1755,6 +1980,7 @@ export default function Studio() {
                 )}
               </div>
             )}
+
           </div>
         </div>
           </>

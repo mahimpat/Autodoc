@@ -142,7 +142,12 @@ export function WorkspaceCard({ workspace, isLoading = false }: WorkspaceCardPro
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setCurrentWorkspace(workspace)}
+              onClick={() => workspace && setCurrentWorkspace({
+                ...workspace,
+                organization_id: 1, // Default organization ID
+                is_active: true,
+                created_by_id: 1 // Default user ID
+              })}
               className="group-hover:shadow-lg group-hover:shadow-primary/10"
             >
               Select

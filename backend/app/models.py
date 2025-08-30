@@ -1,8 +1,10 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON, Table, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON, Table, Boolean, Float, Interval, ARRAY
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.postgresql import UUID, JSONB, TSVECTOR
 from pgvector.sqlalchemy import Vector
 from .db import Base
+import uuid
 
 # Association table for many-to-many relationship between users and organizations
 user_organization = Table(
@@ -202,3 +204,145 @@ class ActivityLog(Base):
     user = relationship("User")
     organization = relationship("Organization")
     workspace = relationship("Workspace")
+
+
+# Template System Models
+
+class TemplateCategory(Base):
+    __tablename__ = "template_categories"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    name = Column(String(100), unique=True, nullable=False)
+    description = Column(Text)
+    icon = Column(String(50))
+    color = Column(String(20))
+    parent_id = Column(UUID(as_uuid=True), ForeignKey('template_categories.id'))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Self-referential relationship for hierarchical categories
+    parent = relationship("TemplateCategory", remote_side=[id])
+    children = relationship("TemplateCategory")
+    
+    # Templates in this category
+    templates = relationship("Template", back_populates="category")
+
+
+class Template(Base):
+    __tablename__ = "templates"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text)
+    category_id = Column(UUID(as_uuid=True), ForeignKey('template_categories.id'))
+    tags = Column(ARRAY(String), default=[])
+    version = Column(String(20), default='1.0.0')
+    author_id = Column(Integer, ForeignKey('users.id'))
+    organization_id = Column(Integer, ForeignKey('organizations.id'), nullable=True)
+    
+    # Template content (YAML/JSON)
+    template_data = Column(JSONB, nullable=False)
+    
+    # Visibility & Access
+    visibility = Column(String(20), default='private')  # private, organization, public, marketplace
+    is_verified = Column(Boolean, default=False)
+    is_featured = Column(Boolean, default=False)
+    
+    # Usage tracking
+    total_uses = Column(Integer, default=0)
+    success_rate = Column(Float, default=0)
+    avg_rating = Column(Float, default=0)
+    avg_completion_time = Column(Interval)
+    
+    # Metadata
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    published_at = Column(DateTime(timezone=True))
+    
+    # Search & Discovery
+    search_vector = Column(TSVECTOR)
+    
+    # Relationships
+    category = relationship("TemplateCategory", back_populates="templates")
+    author = relationship("User")
+    organization = relationship("Organization")
+    variables = relationship("TemplateVariable", back_populates="template", cascade="all, delete-orphan")
+    usage_records = relationship("TemplateUsage", back_populates="template")
+
+
+class TemplateVariable(Base):
+    __tablename__ = "template_variables"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    template_id = Column(UUID(as_uuid=True), ForeignKey('templates.id', ondelete='CASCADE'), nullable=False)
+    name = Column(String(100), nullable=False)
+    type = Column(String(50), nullable=False)  # string, number, boolean, select, url, email, textarea
+    required = Column(Boolean, default=False)
+    default_value = Column(Text)
+    options = Column(JSONB)  # For select types
+    validation_rules = Column(JSONB)
+    placeholder = Column(Text)
+    description = Column(Text)
+    help_text = Column(Text)
+    order_index = Column(Integer, default=0)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    template = relationship("Template", back_populates="variables")
+
+
+class TemplateUsage(Base):
+    __tablename__ = "template_usage"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    template_id = Column(UUID(as_uuid=True), ForeignKey('templates.id'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    document_id = Column(Integer, ForeignKey('documents.id'), nullable=True)
+    
+    # Usage context
+    generation_time = Column(Interval)
+    success = Column(Boolean)
+    completion_rate = Column(Float)
+    variables_used = Column(JSONB)
+    
+    # User feedback
+    rating = Column(Integer)  # 1-5 stars
+    feedback = Column(Text)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    template = relationship("Template", back_populates="usage_records")
+    user = relationship("User")
+    document = relationship("Document")
+
+
+class TemplateCollection(Base):
+    __tablename__ = "template_collections"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text)
+    creator_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    
+    is_public = Column(Boolean, default=False)
+    is_featured = Column(Boolean, default=False)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    creator = relationship("User")
+    items = relationship("TemplateCollectionItem", back_populates="collection", cascade="all, delete-orphan")
+
+
+class TemplateCollectionItem(Base):
+    __tablename__ = "template_collection_items"
+    
+    collection_id = Column(UUID(as_uuid=True), ForeignKey('template_collections.id', ondelete='CASCADE'), primary_key=True)
+    template_id = Column(UUID(as_uuid=True), ForeignKey('templates.id', ondelete='CASCADE'), primary_key=True)
+    order_index = Column(Integer, default=0)
+    
+    # Relationships
+    collection = relationship("TemplateCollection", back_populates="items")
+    template = relationship("Template")

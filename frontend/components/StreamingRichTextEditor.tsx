@@ -131,6 +131,7 @@ export default function StreamingRichTextEditor({
       TextStyle,
     ],
     content: '',
+    immediatelyRender: false,
     onUpdate: ({ editor }) => {
       // Only call onChange if this is a user edit, not a streaming update
       if (!isStreamingUpdateRef.current) {
@@ -160,7 +161,7 @@ export default function StreamingRichTextEditor({
       isStreamingUpdateRef.current = true;
       
       // Update content
-      editor.commands.setContent(htmlContent, false);
+      editor.commands.setContent(htmlContent, { emitUpdate: false });
       
       // Restore cursor position if not streaming or if user was editing
       if (!isStreaming && from > 0) {
