@@ -1,0 +1,27 @@
+mode: Technical Documentation
+metadata:
+  required:
+    - title
+    - source_materials
+  optional:
+    - version
+    - author
+    - system_components
+    - dependencies
+sections:
+  - title: Overview
+    hint: System overview, purpose, and high-level architecture extracted from source materials.
+  - title: Requirements
+    hint: Functional and non-functional requirements identified in uploaded documentation.
+  - title: Architecture & Design
+    hint: System architecture, design patterns, and structural information from source materials.
+  - title: Installation & Setup
+    hint: Installation procedures, dependencies, and setup instructions from uploaded guides.
+  - title: Configuration
+    hint: Configuration options, environment variables, and settings from source documentation.
+  - title: Usage & Examples
+    hint: Usage instructions, code examples, and practical implementations from source materials.
+  - title: API Reference
+    hint: API endpoints, methods, parameters, and responses documented in source materials.
+  - title: Troubleshooting
+    hint: Common issues, error handling, and troubleshooting information from source docs.

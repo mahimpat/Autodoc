@@ -1,0 +1,28 @@
+mode: Project Documentation
+metadata:
+  required:
+    - title
+    - source_materials
+  optional:
+    - project_lead
+    - team_members
+    - start_date
+    - target_completion
+    - stakeholders
+sections:
+  - title: Project Overview
+    hint: Project goals, scope, and objectives extracted from source materials and meeting notes.
+  - title: Requirements & Specifications
+    hint: Business requirements, functional specifications, and constraints from uploaded documents.
+  - title: Project Timeline & Milestones
+    hint: Timeline, milestones, deliverables, and schedule information from project documentation.
+  - title: Team & Responsibilities
+    hint: Team structure, roles, responsibilities, and contact information from source materials.
+  - title: Technical Implementation
+    hint: Technical approach, architecture decisions, and implementation details from project docs.
+  - title: Risk Management
+    hint: Identified risks, mitigation strategies, and contingency plans from project planning documents.
+  - title: Progress & Status
+    hint: Current status, completed tasks, and progress updates from meeting notes and status reports.
+  - title: Next Steps & Action Items
+    hint: Upcoming tasks, action items, and future planning extracted from project documentation.

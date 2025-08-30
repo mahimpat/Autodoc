@@ -371,81 +371,182 @@ def extract_text_cached(path: str) -> str:
         pass
     return text
 
-def to_snippets(text: str, min_len: int = 50, max_len: int = 1200, overlap: int = 150):
-    """Create snippets optimized for OCR content and handwritten notes"""
+def to_snippets(text: str, min_len: int = 25, max_len: int = 2000, overlap: int = 300):
+    """Create comprehensive snippets optimized for source-truth documentation generation.
+    
+    Since uploaded documents are the source of truth, we need to capture ALL information
+    with minimal loss. This function creates overlapping chunks with aggressive coverage.
+    """
     if not text or not text.strip():
         return []
     
     text = text.strip()
     
-    # For shorter texts (like OCR from handwritten notes), use smaller chunks
+    # Always include the original text for very short content
     if len(text) < min_len:
         return [text] if text else []
     
-    # Try different splitting strategies
+    # For source-truth documents, we want comprehensive coverage with multiple strategies
+    all_chunks = []
     
-    # Strategy 1: Split on double newlines (paragraphs)
-    paras = [p.strip() for p in re.split(r"\n{2,}", text) if p.strip()]
+    # Strategy 1: Preserve document structure - split on headers and sections
+    section_chunks = []
+    header_pattern = r'\n(===.*?===|\#{1,6}\s+.+|[A-Z][A-Z\s]{10,})\n'
+    sections = re.split(header_pattern, text, flags=re.IGNORECASE)
     
-    # Strategy 2: If no clear paragraphs, split on single newlines and group
-    if len(paras) <= 1:
+    current_section = ""
+    for i, section in enumerate(sections):
+        if section and section.strip():
+            current_section += section + "\n"
+            # If section is getting large, create a chunk
+            if len(current_section) >= max_len * 0.8:
+                if len(current_section.strip()) >= min_len:
+                    section_chunks.append(current_section.strip())
+                current_section = ""
+    
+    # Add remaining section content
+    if current_section.strip() and len(current_section.strip()) >= min_len:
+        section_chunks.append(current_section.strip())
+    
+    # Strategy 2: Paragraph-based chunking for comprehensive coverage
+    para_chunks = []
+    paragraphs = [p.strip() for p in re.split(r'\n{2,}', text) if p.strip()]
+    
+    # If no clear paragraphs, split on single newlines and group more aggressively
+    if len(paragraphs) <= 2:
         lines = [l.strip() for l in text.split('\n') if l.strip()]
         if len(lines) > 1:
-            # Group lines into logical chunks
-            paras = []
+            paragraphs = []
             current_para = []
+            
             for line in lines:
                 current_para.append(line)
-                # Start new paragraph on certain indicators
-                if (len(' '.join(current_para)) > min_len and 
-                    (line.endswith('.') or line.endswith(':') or line.endswith('?') or line.endswith('!'))):
-                    paras.append(' '.join(current_para))
+                para_text = '\n'.join(current_para)
+                
+                # Create chunks more frequently to capture more information
+                should_chunk = (
+                    len(para_text) >= min_len * 2 and (
+                        line.endswith('.') or line.endswith(':') or 
+                        line.endswith('?') or line.endswith('!') or
+                        line.endswith(';') or line.endswith(',') or
+                        '|' in line or  # Table rows
+                        line.isupper() or  # Headers
+                        re.match(r'^\d+\.', line.strip()) or  # Numbered lists
+                        re.match(r'^[-*•]', line.strip())  # Bullet points
+                    )
+                )
+                
+                if should_chunk or len(para_text) >= max_len * 0.7:
+                    if len(para_text) >= min_len:
+                        paragraphs.append(para_text)
                     current_para = []
             
-            # Add remaining lines
+            # Add remaining content
             if current_para:
-                paras.append(' '.join(current_para))
+                remaining_text = '\n'.join(current_para)
+                if len(remaining_text.strip()) >= min_len:
+                    paragraphs.append(remaining_text)
     
-    # Strategy 3: If still no good split, use sentence-based chunking
-    if len(paras) <= 1:
-        sentences = re.split(r'[.!?]+\s*', text)
-        sentences = [s.strip() for s in sentences if s.strip()]
+    # Create overlapping chunks from paragraphs
+    current_chunk = ""
+    for para in paragraphs:
+        test_chunk = (current_chunk + "\n\n" + para).strip() if current_chunk else para
         
-        if len(sentences) > 1:
-            paras = []
-            current_chunk = []
-            for sentence in sentences:
-                current_chunk.append(sentence)
-                if len(' '.join(current_chunk)) >= min_len:
-                    paras.append(' '.join(current_chunk) + '.')
-                    current_chunk = []
-            
-            if current_chunk:
-                paras.append(' '.join(current_chunk))
-    
-    # If we still have no good paragraphs, chunk by size
-    if len(paras) <= 1:
-        paras = [text[i:i+max_len] for i in range(0, len(text), max_len-overlap)]
-    
-    # Now create final chunks with overlap
-    chunks = []
-    cur = ""
-    
-    for p in paras:
-        if len(cur) + len(p) + 2 <= max_len:
-            cur = (cur + "\n\n" + p).strip() if cur else p
+        if len(test_chunk) <= max_len:
+            current_chunk = test_chunk
         else:
-            if len(cur) >= min_len:
-                chunks.append(cur)
-            # Add overlap from previous chunk
-            cur = ((cur[-overlap:] + "\n\n" + p) if cur and len(cur) > overlap else p).strip()
+            # Save current chunk if it meets minimum length
+            if current_chunk and len(current_chunk) >= min_len:
+                para_chunks.append(current_chunk)
+            
+            # Start new chunk with overlap
+            if len(current_chunk) > overlap:
+                overlap_text = current_chunk[-overlap:]
+                current_chunk = (overlap_text + "\n\n" + para).strip()
+            else:
+                current_chunk = para
     
     # Add final chunk
-    if cur and len(cur) >= min_len:
-        chunks.append(cur)
+    if current_chunk and len(current_chunk) >= min_len:
+        para_chunks.append(current_chunk)
     
-    # If no chunks meet minimum length, just return the original text
-    if not chunks and text:
-        chunks = [text]
+    # Strategy 3: Sliding window for maximum coverage
+    window_chunks = []
+    if len(text) > max_len:
+        step_size = max_len - overlap
+        for i in range(0, len(text), step_size):
+            chunk = text[i:i + max_len]
+            if len(chunk.strip()) >= min_len:
+                window_chunks.append(chunk.strip())
     
-    return chunks
+    # Strategy 4: Special handling for structured content (tables, lists, code)
+    structured_chunks = []
+    
+    # Extract tables
+    table_matches = re.finditer(r'(\|.*\|.*\n){2,}', text, re.MULTILINE)
+    for match in table_matches:
+        table_text = match.group(0).strip()
+        if len(table_text) >= min_len:
+            structured_chunks.append("TABLE:\n" + table_text)
+    
+    # Extract code blocks
+    code_matches = re.finditer(r'```[\s\S]*?```|`[^`\n]+`', text)
+    for match in code_matches:
+        code_text = match.group(0).strip()
+        if len(code_text) >= min_len:
+            structured_chunks.append("CODE:\n" + code_text)
+    
+    # Extract numbered/bulleted lists
+    list_matches = re.finditer(r'(^[ \t]*[\d\w\-*•][\.\)]\s+.*\n){2,}', text, re.MULTILINE)
+    for match in list_matches:
+        list_text = match.group(0).strip()
+        if len(list_text) >= min_len:
+            structured_chunks.append("LIST:\n" + list_text)
+    
+    # Combine all strategies and deduplicate
+    all_chunks = section_chunks + para_chunks + window_chunks + structured_chunks
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_chunks = []
+    for chunk in all_chunks:
+        # Use a hash of the first 100 chars to detect near-duplicates
+        chunk_key = chunk[:100].strip()
+        if chunk_key not in seen and len(chunk) >= min_len:
+            unique_chunks.append(chunk)
+            seen.add(chunk_key)
+    
+    # If no good chunks were created, fall back to simple chunking
+    if not unique_chunks:
+        # Very aggressive fallback - chunk by sentences with minimal requirements
+        sentences = re.split(r'[.!?]+\s+', text)
+        sentences = [s.strip() for s in sentences if s.strip()]
+        
+        if sentences:
+            current_chunk = ""
+            for sentence in sentences:
+                test_chunk = (current_chunk + ". " + sentence).strip() if current_chunk else sentence
+                
+                if len(test_chunk) <= max_len:
+                    current_chunk = test_chunk
+                else:
+                    if current_chunk:
+                        unique_chunks.append(current_chunk + ".")
+                    current_chunk = sentence
+            
+            if current_chunk:
+                unique_chunks.append(current_chunk)
+        
+        # Ultimate fallback - just use the original text in chunks
+        if not unique_chunks:
+            for i in range(0, len(text), max_len - overlap):
+                chunk = text[i:i + max_len]
+                if chunk.strip():
+                    unique_chunks.append(chunk.strip())
+    
+    # Ensure we have at least something if the original text exists
+    if not unique_chunks and text.strip():
+        unique_chunks = [text]
+    
+    print(f"DEBUG CHUNKING: Created {len(unique_chunks)} chunks from {len(text)} chars using comprehensive strategy")
+    return unique_chunks

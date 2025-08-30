@@ -4,6 +4,13 @@ import ReactMarkdown from 'react-markdown';
 import { useMemo } from 'react';
 import remarkGfm from 'remark-gfm';
 import { useState } from 'react';
+import RichTextEditor from './RichTextEditor';
+import { 
+  PencilSquareIcon, 
+  EyeIcon, 
+  DocumentTextIcon,
+  SparklesIcon 
+} from '@heroicons/react/24/outline';
 
 function insertCites(text: string, cites: number[]): string {
   if (!text || !cites?.length) return text;
@@ -23,26 +30,109 @@ export default function EditorPanel() {
   const outline = useDocStore(s => s.outline);
   const idx = useDocStore(s => s.activeIndex);
   const update = useDocStore(s => s.updateSection);
-  const [tab, setTab] = useState<'edit'|'preview'>('edit');
-  if (!outline || idx==null) return <div className="text-sm text-gray-500 p-2">Select a section to edit.</div>;
+  const [tab, setTab] = useState<'markdown'|'visual'|'preview'>('visual');
+  
+  if (!outline || idx==null) {
+    return (
+      <div className="flex items-center justify-center h-full text-center p-8">
+        <div className="max-w-md">
+          <DocumentTextIcon className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-slate-600 dark:text-slate-400 mb-2">
+            Select a Section to Edit
+          </h3>
+          <p className="text-sm text-slate-500 dark:text-slate-500">
+            Choose a section from the outline to start editing with our powerful visual editor or markdown mode.
+          </p>
+        </div>
+      </div>
+    );
+  }
+  
   const section = outline.sections[idx];
   const previewHtml = useMemo(()=>({__html: insertCites(section.content || '', section.citations||[])}), [section.content, section.citations]);
+  
+  const handleRichTextChange = (htmlContent: string) => {
+    // Convert HTML back to markdown for storage
+    // For now, we'll store HTML and convert when needed
+    update(idx, { content: htmlContent });
+  };
+  
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-2 mb-2">
-        <button className={`btn ${tab==='edit'?'btn-primary':''}`} onClick={()=>setTab('edit')}>Edit</button>
-        <button className={`btn ${tab==='preview'?'btn-primary':''}`} onClick={()=>setTab('preview')}>Preview</button>
-      </div>
-      {tab==='edit' ? (
-        <textarea className="w-full h-full p-3 rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-white/5"
-          value={section.content || ''}
-          onChange={e=>update(idx, { content: e.target.value })}
-          placeholder="Model output will stream here. You can edit anytime." />
-      ) : (
-        <div className="prose dark:prose-invert max-w-none overflow-auto h-full p-3 rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-white/5">
-          <div dangerouslySetInnerHTML={previewHtml} className="prose dark:prose-invert max-w-none" />
+      {/* Enhanced Tab Bar */}
+      <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-2">
+        <div className="flex items-center gap-1">
+          <button 
+            className={`
+              flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors
+              ${tab === 'visual' 
+                ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300' 
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800'
+              }
+            `}
+            onClick={() => setTab('visual')}
+          >
+            <SparklesIcon className="w-4 h-4" />
+            Visual Editor
+          </button>
+          <button 
+            className={`
+              flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors
+              ${tab === 'markdown' 
+                ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300' 
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800'
+              }
+            `}
+            onClick={() => setTab('markdown')}
+          >
+            <PencilSquareIcon className="w-4 h-4" />
+            Markdown
+          </button>
+          <button 
+            className={`
+              flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors
+              ${tab === 'preview' 
+                ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300' 
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800'
+              }
+            `}
+            onClick={() => setTab('preview')}
+          >
+            <EyeIcon className="w-4 h-4" />
+            Preview
+          </button>
         </div>
-      )}
+        
+        <div className="text-xs text-slate-500 dark:text-slate-400">
+          Section: {section.heading || 'Untitled'}
+        </div>
+      </div>
+
+      {/* Content Area */}
+      <div className="flex-1 overflow-hidden">
+        {tab === 'visual' ? (
+          <div className="h-full p-4">
+            <RichTextEditor
+              content={section.content || ''}
+              onChange={handleRichTextChange}
+              placeholder={`Start writing the "${section.heading}" section...`}
+            />
+          </div>
+        ) : tab === 'markdown' ? (
+          <textarea 
+            className="w-full h-full p-4 border-0 bg-transparent resize-none focus:outline-none font-mono text-sm leading-relaxed"
+            value={section.content || ''}
+            onChange={e => update(idx, { content: e.target.value })}
+            placeholder={`# ${section.heading}\n\nStart writing in Markdown format...\n\n**Bold text**, *italic text*, and more formatting available.`}
+          />
+        ) : (
+          <div className="h-full overflow-auto p-4">
+            <div className="prose dark:prose-invert max-w-none">
+              <div dangerouslySetInnerHTML={previewHtml} />
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -19,7 +19,7 @@ class ModelConfig:
     OLLAMA_MODELS = {
         "phi3:mini": {"name": "Phi-3 Mini", "provider": ModelProvider.OLLAMA, "speed": "fast", "quality": "good"},
         "mistral:7b": {"name": "Mistral 7B", "provider": ModelProvider.OLLAMA, "speed": "medium", "quality": "good"},
-        "llama3:instruct": {"name": "Llama3 Instruct", "provider": ModelProvider.OLLAMA, "speed": "medium", "quality": "excellent"},
+        "llama3.1:8b-instruct-q4_0": {"name": "Llama 3.1 8B Instruct", "provider": ModelProvider.OLLAMA, "speed": "medium", "quality": "excellent"},
     }
     
     # OpenAI models

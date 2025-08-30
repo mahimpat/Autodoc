@@ -1,0 +1,26 @@
+mode: Content-Driven Documentation
+metadata:
+  required:
+    - title
+    - source_materials
+  optional:
+    - extraction_date
+    - content_sources
+    - processing_notes
+sections:
+  - title: Content Overview
+    hint: What information is actually present in the uploaded materials - describe what was found, not what was expected.
+  - title: Key Information Extracted
+    hint: Main facts, data, specifications, and details found in the source materials, organized by topic or theme.
+  - title: Procedures and Instructions
+    hint: Any step-by-step procedures, instructions, or processes identified in the uploaded content.
+  - title: Technical Details
+    hint: Technical specifications, configurations, requirements, or system details found in the source materials.
+  - title: Data and Measurements
+    hint: Numbers, statistics, measurements, dates, and quantitative information extracted from the sources.
+  - title: Decisions and Requirements
+    hint: Decisions made, requirements identified, or constraints mentioned in the source materials.
+  - title: Additional Context
+    hint: Supporting information, background details, or contextual notes found in the uploaded materials.
+  - title: Source Content Summary
+    hint: Summary of what types of information were available in the uploaded materials and any limitations noted.

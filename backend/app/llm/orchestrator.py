@@ -6,27 +6,35 @@ from .model_interface import unified_client
 
 TEMPLATE_DIR = pathlib.Path("/app/templates")
 
-SECTION_PROMPT = """You are a professional document writer transforming rough notes and source material into the "{heading}" section of a {mode} titled "{title}".
+SECTION_PROMPT = """You are a professional documentation specialist who transforms uploaded source materials (rough notes, documents, handwritten content, OCR text) into comprehensive documentation. You are working on the "{heading}" section.
 
-REQUIREMENTS:
-1. USE ONLY THE SOURCE MATERIAL PROVIDED BELOW - DO NOT ADD EXTERNAL KNOWLEDGE
-2. Transform rough notes, handwritten text, and OCR content into professional language
-3. Preserve ALL factual details, numbers, dates, names, and specific information exactly as provided
-4. Do not invent, assume, or add any details not explicitly stated in the sources
-5. Organize the content logically but stick strictly to what's provided
+CRITICAL INSTRUCTION: The content you generate must be ENTIRELY based on the uploaded source materials below. Ignore any preconceptions about what this documentation should contain based on the title "{title}" or document type "{mode}". Instead, let the actual uploaded content guide what you write.
 
-HANDLING LIMITED SOURCE MATERIAL:
-- Look carefully for ANY content that could relate to "{heading}" - even indirect mentions
-- Consider tables, lists, diagrams, metadata, and brief notes as valuable content
-- If you find partial information, present it clearly with context
-- If you find related information that doesn't directly match the heading, explain the connection
-- Only use "[Limited source material for this section]" if absolutely no relevant content exists
-- When material is sparse, focus on what IS available rather than what's missing
+CORE PRINCIPLES:
+1. **SOURCE-DRIVEN CONTENT**: Base ALL content decisions on what's actually in the uploaded materials, not on what you think should be in this type of document.
+2. **CONTENT-FIRST APPROACH**: If the uploaded materials contain information that seems relevant to "{heading}", include it regardless of whether it fits typical expectations for this section.
+3. **COMPREHENSIVE EXTRACTION**: Analyze ALL content thoroughly - extract everything that could be relevant to "{heading}" even if it's incomplete or fragmented.
+4. **ZERO ASSUMPTIONS**: Never add information, examples, or details not explicitly present in the source materials.
+
+CONTENT DISCOVERY STRATEGY:
+- **Primary Search**: Look for content directly related to "{heading}"
+- **Secondary Search**: Find information that provides context, background, or supporting details for "{heading}"
+- **Structural Mining**: Extract from tables, lists, diagrams, code blocks, configurations, procedures
+- **Detail Extraction**: Capture names, dates, versions, specifications, requirements, constraints, examples
+- **Connection Mapping**: Include information that connects to or depends on "{heading}" concepts
+
+TRANSFORMATION APPROACH:
+- If source materials contain detailed information for "{heading}", create a comprehensive section
+- If source materials contain limited information for "{heading}", write what's available and note the scope
+- If source materials contain no direct information for "{heading}", look for related/contextual information
+- Always indicate when information is limited: "Based on the uploaded materials, [limited information available]"
+- Convert rough notes and fragmented content into professional, readable documentation
+- Preserve all technical details, specifications, examples, and procedures exactly as provided
 
 SOURCE MATERIAL FROM UPLOADED FILES:
 {source_excerpt}
 
-TASK: Extract and professionally rewrite ALL information from the source material above that could relate to "{heading}". Look for direct matches, partial matches, and contextual connections. Present whatever relevant information exists in a clear, professional format."""
+TASK: Analyze the uploaded source materials above and create the "{heading}" section using ONLY what's actually present in those materials. Let the content of the uploaded files determine what goes into this section, not preconceived notions about what a "{heading}" section typically contains."""
 
 def list_templates() -> Dict[str, str]:
     if not TEMPLATE_DIR.exists():
@@ -52,16 +60,31 @@ def search_snippets(db: Session, user_id: int, project: str, query: str, topk: i
     return [(r[0], r[1]) for r in rows]
 
 def stream_section(mode: str, title: str, heading: str, user_context: str = "", source_excerpt: str = "", model: str | None = None, system: str | None = None) -> Iterator[str]:
+    source_content = source_excerpt or "[No excerpts available]"
     prompt = SECTION_PROMPT.format(
         mode=mode or "technical document",
         title=title,
         heading=heading,
         user_context=user_context or "",
-        source_excerpt=source_excerpt or "[No excerpts available]",
+        source_excerpt=source_content,
     )
+    print(f"DEBUG LLM: Section '{heading}' - Source content length: {len(source_content)} chars")
+    print(f"DEBUG LLM: Source content preview: {source_content[:200]}..." if len(source_content) > 10 else f"DEBUG LLM: Source content: {source_content}")
+    print(f"DEBUG LLM: Prompt contains uploaded content: {'SOURCE:' in source_content or len(source_content) > 50}")
     # Use unified client for multi-model support
-    for tok in unified_client.stream_generate(prompt, model=model or "phi3:mini", system=system):
-        yield tok
+    print(f"DEBUG ORCHESTRATOR: About to call unified_client.stream_generate with model {model or 'phi3:mini'}")
+    try:
+        token_count = 0
+        for tok in unified_client.stream_generate(prompt, model=model or "phi3:mini", system=system):
+            token_count += 1
+            if token_count <= 3:
+                print(f"DEBUG ORCHESTRATOR TOKEN {token_count}: '{tok}'")
+            yield tok
+        print(f"DEBUG ORCHESTRATOR: Generated {token_count} total tokens")
+    except Exception as e:
+        print(f"DEBUG ORCHESTRATOR ERROR: {e}")
+        print(f"DEBUG ORCHESTRATOR ERROR TYPE: {type(e)}")
+        raise
 
 
 def search_snippets_hybrid(db: Session, user_id: int, project: str, query: str, topk: int = 6, n: int = 12, alpha: float = 0.5):

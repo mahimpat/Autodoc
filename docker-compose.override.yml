@@ -1,0 +1,26 @@
+# Development overrides for hot reloading
+version: '3.8'
+
+services:
+  api:
+    volumes:
+      - ./backend/app:/app/app:ro  # Read-only mount for security
+    environment:
+      - PYTHONPATH=/app
+      - WATCHFILES_FORCE_POLLING=1  # Better file watching in Docker
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --log-level debug
+
+  frontend:
+    volumes:
+      - ./frontend:/app:ro  # Read-only mount
+      - /app/node_modules   # Exclude node_modules
+      - /app/.next         # Exclude build files
+    environment:
+      - NODE_ENV=development
+      - WATCHPACK_POLLING=true  # Better file watching for Next.js
+    command: npm run dev
+
+  # Optional: Add a development database with more relaxed settings
+  db:
+    environment:
+      - POSTGRES_LOG_STATEMENT=all  # Log all SQL statements in dev

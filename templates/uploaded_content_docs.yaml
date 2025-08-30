@@ -1,0 +1,28 @@
+mode: Documentation from Uploaded Content
+metadata:
+  required:
+    - title
+    - source_materials
+  optional:
+    - document_type
+    - author
+    - version
+    - date_created
+    - keywords
+sections:
+  - title: Executive Summary
+    hint: High-level overview extracted from source materials - key points, purpose, and main outcomes.
+  - title: Background & Context
+    hint: Background information, problem statement, and context derived from source materials.
+  - title: Key Information & Findings
+    hint: Main content, findings, data, or information extracted and organized from uploaded documents.
+  - title: Detailed Analysis
+    hint: In-depth analysis, technical details, specifications, or comprehensive breakdown of source content.
+  - title: Procedures & Implementation
+    hint: Step-by-step procedures, implementation details, configurations, or actionable instructions from sources.
+  - title: Requirements & Specifications
+    hint: Requirements, specifications, constraints, or technical criteria identified in source materials.
+  - title: Conclusions & Recommendations
+    hint: Conclusions drawn from source material and any recommendations or next steps mentioned.
+  - title: References & Additional Information
+    hint: Supporting information, references, appendices, or additional details from source documents.

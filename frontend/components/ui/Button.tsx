@@ -13,21 +13,21 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <button
         className={clsx(
-          'inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none',
+          'inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none group relative overflow-hidden',
           {
-            // Variants
-            'bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600 focus:ring-primary-500/20': variant === 'default',
-            'text-white bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 border-0 hover:shadow-glow focus:ring-primary-500/30 hover:scale-[1.02] active:scale-[0.98]': variant === 'primary',
-            'bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200': variant === 'secondary',
-            'bg-transparent border-transparent hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-300': variant === 'ghost',
-            'bg-transparent border-primary-500 text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-950/50': variant === 'outline',
-            'bg-error-500 hover:bg-error-600 text-white border-0': variant === 'destructive',
+            // Variants - Premium Modern Design
+            'bg-secondary border border-border text-secondary-foreground hover:bg-secondary/80 hover:shadow-lg hover:shadow-black/5 hover:border-border/60 hover:-translate-y-0.5': variant === 'default',
+            'bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-1 active:translate-y-0 hover:scale-[1.02] active:scale-[0.98] border-0': variant === 'primary',
+            'bg-violet-500 text-white hover:bg-violet-600 shadow-lg shadow-violet-500/25 hover:shadow-xl hover:shadow-violet-500/40 hover:-translate-y-1 active:translate-y-0 font-semibold border-0': variant === 'secondary',
+            'hover:bg-muted/50 text-muted-foreground hover:text-foreground hover:shadow-md hover:shadow-black/5 hover:-translate-y-0.5': variant === 'ghost',
+            'border border-primary/20 bg-primary/5 text-primary hover:bg-primary hover:text-primary-foreground hover:shadow-lg hover:shadow-primary/20 hover:-translate-y-0.5 backdrop-blur-sm': variant === 'outline',
+            'bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-lg shadow-destructive/25 hover:shadow-xl hover:shadow-destructive/40 hover:-translate-y-1 active:translate-y-0 border-0': variant === 'destructive',
             
             // Sizes
             'px-3 py-1.5 text-sm': size === 'sm',
-            'px-4 py-2': size === 'default',
-            'px-6 py-3 text-lg': size === 'lg',
-            'w-10 h-10': size === 'icon',
+            'px-5 py-2.5': size === 'default',
+            'px-8 py-4 text-lg font-semibold': size === 'lg',
+            'w-11 h-11': size === 'icon',
           },
           className
         )}

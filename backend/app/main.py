@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from time import sleep
 
-from .routers import templates, ingest_generate, documents_stream, documents_admin, auth, documents_rest, snippets, models
+from .routers import templates, ingest_generate, documents_stream, documents_admin, auth, documents_rest, snippets, models, intelligence, debug, organizations, export
 from .settings import settings
 from .db import Base, engine
 
@@ -69,6 +69,10 @@ app.include_router(documents_rest.router)
 app.include_router(models.router)
 
 app.include_router(snippets.router)
+app.include_router(intelligence.router)
+app.include_router(debug.router)
+app.include_router(organizations.router)
+app.include_router(export.router)
 
 from .routers import billing
 app.include_router(billing.router)

@@ -1,0 +1,199 @@
+version: '3.8'
+
+services:
+  # Primary Ollama instance (for priority requests)
+  ollama-primary:
+    image: ollama/ollama
+    container_name: autodoc_ollama_primary
+    volumes:
+      - ollama-data-primary:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_ORIGINS=*
+      - OLLAMA_NUM_PARALLEL=2
+    ports:
+      - "11434:11434"
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 4G
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Secondary Ollama instance (for normal requests)
+  ollama-secondary:
+    image: ollama/ollama
+    container_name: autodoc_ollama_secondary
+    volumes:
+      - ollama-data-secondary:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_ORIGINS=*
+      - OLLAMA_NUM_PARALLEL=2
+    ports:
+      - "11435:11434"
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 4G
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Fast Ollama instance (for cached/simple requests)
+  ollama-fast:
+    image: ollama/ollama
+    container_name: autodoc_ollama_fast
+    volumes:
+      - ollama-data-fast:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_ORIGINS=*
+      - OLLAMA_NUM_PARALLEL=3
+    ports:
+      - "11436:11434"
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+        reservations:
+          memory: 3G
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Load balancer for Ollama instances
+  ollama-lb:
+    image: nginx:alpine
+    container_name: autodoc_ollama_lb
+    volumes:
+      - ./config/nginx-ollama.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "11437:80"
+    depends_on:
+      - ollama-primary
+      - ollama-secondary
+      - ollama-fast
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Your existing services
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    restart: unless-stopped
+
+  api:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    depends_on:
+      - db
+      - redis
+      - minio
+      - ollama-lb
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379/0
+      - OLLAMA_URL=http://ollama-lb:80
+      - OLLAMA_PRIMARY_URL=http://ollama-primary:11434
+      - OLLAMA_SECONDARY_URL=http://ollama-secondary:11434
+      - OLLAMA_FAST_URL=http://ollama-fast:11434
+      - S3_ENDPOINT=http://minio:9000
+      - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID}
+      - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./uploads:/app/uploads
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_BASE=http://localhost:8000
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: python -m celery -A app.worker worker --loglevel=info
+    depends_on:
+      - db
+      - redis
+      - ollama-lb
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379/0
+      - OLLAMA_URL=http://ollama-lb:80
+      - OLLAMA_PRIMARY_URL=http://ollama-primary:11434
+      - OLLAMA_SECONDARY_URL=http://ollama-secondary:11434
+      - OLLAMA_FAST_URL=http://ollama-fast:11434
+    volumes:
+      - ./uploads:/app/uploads
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  ollama-data-primary:
+  ollama-data-secondary:
+  ollama-data-fast:

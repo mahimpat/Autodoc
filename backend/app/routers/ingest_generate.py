@@ -5,7 +5,7 @@ from typing import List
 import os, time, uuid, json
 
 from ..auth import get_current_user, get_db
-from ..models import Document, User, Snippet, PinnedSnippet
+from ..models import Document, User, Snippet, PinnedSnippet, Workspace
 from ..llm.orchestrator import load_template, seed_empty_outline, stream_section, search_snippets_hybrid as search_snippets
 from ..processing.extract import extract_text_cached, to_snippets
 from ..llm.model_interface import unified_client
@@ -20,45 +20,163 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 def _sse(e: dict) -> bytes:
     return f"data: {json.dumps(e, ensure_ascii=False)}\n\n".encode("utf-8")
 
+def _get_workspace_content(user: User, db: Session) -> List[str]:
+    """Get content from user's current workspace, falling back to user's own content"""
+    user_source_texts = []
+    
+    try:
+        # First, try to get workspace-scoped content if user has a current workspace
+        if user.current_organization_id:
+            # Get user's current workspace from their organization
+            current_workspace = db.query(Workspace).filter(
+                Workspace.organization_id == user.current_organization_id,
+                Workspace.is_active == True
+            ).first()
+            
+            if current_workspace:
+                # Get all shared snippets from the workspace (most recent first)
+                workspace_snippets = db.query(Snippet).filter(
+                    Snippet.workspace_id == current_workspace.id,
+                    Snippet.is_shared == True
+                ).order_by(Snippet.id.desc()).all()
+                
+                print(f"DEBUG WORKSPACE: Found {len(workspace_snippets)} shared snippets in workspace {current_workspace.name}")
+                
+                if workspace_snippets:
+                    # Get the most recent upload path from workspace
+                    latest_path = workspace_snippets[0].path
+                    print(f"DEBUG WORKSPACE: Latest workspace upload path: {latest_path}")
+                    
+                    # Filter to only use snippets from the most recent workspace upload
+                    latest_workspace_snippets = [s for s in workspace_snippets if s.path == latest_path]
+                    user_source_texts = [snippet.text for snippet in latest_workspace_snippets if snippet.text and snippet.text.strip()]
+                    
+                    print(f"DEBUG WORKSPACE: Using {len(user_source_texts)} snippets from latest workspace upload")
+        
+        # Fallback to user's personal content if no workspace content
+        if not user_source_texts:
+            print(f"DEBUG FALLBACK: No workspace content found, using user's personal content")
+            all_user_snippets = db.query(Snippet).filter_by(user_id=user.id).order_by(Snippet.id.desc()).all()
+            print(f"DEBUG FALLBACK: Found {len(all_user_snippets)} personal snippets")
+            
+            if all_user_snippets:
+                # Get the most recent upload path from personal content
+                latest_path = all_user_snippets[0].path
+                print(f"DEBUG FALLBACK: Latest personal upload path: {latest_path}")
+                
+                # Filter to only use snippets from the most recent personal upload
+                latest_snippets = [s for s in all_user_snippets if s.path == latest_path]
+                user_source_texts = [snippet.text for snippet in latest_snippets if snippet.text and snippet.text.strip()]
+                
+                print(f"DEBUG FALLBACK: Using {len(user_source_texts)} snippets from latest personal upload")
+    
+    except Exception as e:
+        print(f"DEBUG ERROR: Error fetching workspace content: {e}")
+        user_source_texts = []
+    
+    return user_source_texts
+
 def _analyze_extracted_content(text: str, filename: str) -> dict:
-    """Analyze extracted content to provide user feedback"""
+    """Analyze extracted content to provide comprehensive user feedback and processing guidance"""
     analysis = {}
     
     if not text or len(text.strip()) < 10:
         analysis["content_type"] = "empty"
         analysis["status_message"] = "No readable content found"
+        analysis["documentation_potential"] = "none"
         return analysis
     
-    # Detect content types
-    content_indicators = []
+    text_lower = text.lower()
     
+    # Detect document structure and content types
+    structure_indicators = []
+    content_types = []
+    documentation_signals = []
+    
+    # Structure detection
     if "=== PAGE" in text:
-        content_indicators.append("multi-page PDF")
-    if "=== TABLE" in text or "|" in text:
-        content_indicators.append("tables")
+        structure_indicators.append("multi-page PDF")
+    if "=== TABLE" in text or text.count("|") > 5:
+        structure_indicators.append("tables")
     if "TITLE:" in text or "AUTHOR:" in text:
-        content_indicators.append("document metadata")
+        structure_indicators.append("document metadata")
     if len(text.split("\n")) > 20:
-        content_indicators.append("structured text")
-    if any(word in text.lower() for word in ["bullet", "•", "numbered", "list"]):
-        content_indicators.append("lists")
+        structure_indicators.append("structured text")
+    if any(word in text_lower for word in ["bullet", "•", "numbered", "list", "- ", "* "]):
+        structure_indicators.append("lists")
+    if text.count("##") > 3 or text.count("#") > 5:
+        structure_indicators.append("markdown headers")
     
-    # Estimate content quality
+    # Content type detection (what kind of document this appears to be)
+    if any(word in text_lower for word in ["api", "endpoint", "method", "request", "response", "json", "xml"]):
+        content_types.append("API documentation")
+        documentation_signals.append("technical specs")
+    if any(word in text_lower for word in ["class", "function", "method", "variable", "import", "def ", "class "]):
+        content_types.append("code documentation")
+        documentation_signals.append("code reference")
+    if any(word in text_lower for word in ["requirements", "specifications", "shall", "must", "should"]):
+        content_types.append("requirements document")
+        documentation_signals.append("requirements")
+    if any(word in text_lower for word in ["meeting", "action items", "decisions", "attendees", "agenda"]):
+        content_types.append("meeting notes")
+        documentation_signals.append("decisions/notes")
+    if any(word in text_lower for word in ["contract", "agreement", "terms", "conditions", "liability", "party"]):
+        content_types.append("legal document")
+        documentation_signals.append("legal/compliance")
+    if any(word in text_lower for word in ["research", "study", "methodology", "results", "conclusion", "hypothesis"]):
+        content_types.append("research document")
+        documentation_signals.append("research/analysis")
+    if any(word in text_lower for word in ["installation", "setup", "configuration", "deployment", "usage"]):
+        content_types.append("technical guide")
+        documentation_signals.append("procedures/setup")
+    if any(word in text_lower for word in ["project", "timeline", "milestone", "deliverable", "scope"]):
+        content_types.append("project documentation")
+        documentation_signals.append("project planning")
+    
+    # Quality and complexity assessment
     words = len(text.split())
     lines = len([l for l in text.split("\n") if l.strip()])
+    sentences = len([s for s in text.split(".") if s.strip()])
     
     if words < 50:
-        quality = "short"
-    elif words < 500:
-        quality = "medium"
+        quality = "brief"
+        complexity = "simple"
+    elif words < 200:
+        quality = "concise"
+        complexity = "simple" if sentences < 20 else "moderate"
+    elif words < 1000:
+        quality = "detailed"
+        complexity = "moderate" if sentences < 50 else "complex"
     else:
-        quality = "extensive"
+        quality = "comprehensive"
+        complexity = "complex"
     
-    analysis["content_type"] = ", ".join(content_indicators) if content_indicators else "plain text"
+    # Documentation potential assessment
+    if content_types and words > 100:
+        doc_potential = "high"
+    elif content_types or words > 50:
+        doc_potential = "medium"
+    elif words > 20:
+        doc_potential = "low"
+    else:
+        doc_potential = "minimal"
+    
+    # Compile analysis
+    analysis["content_type"] = ", ".join(content_types) if content_types else "general document"
+    analysis["structure"] = ", ".join(structure_indicators) if structure_indicators else "plain text"
+    analysis["documentation_signals"] = documentation_signals
     analysis["word_count"] = words
     analysis["line_count"] = lines
     analysis["quality"] = quality
-    analysis["status_message"] = f"Extracted {quality} content with {words} words"
+    analysis["complexity"] = complexity
+    analysis["documentation_potential"] = doc_potential
+    
+    # Create comprehensive status message
+    if content_types:
+        primary_type = content_types[0]
+        analysis["status_message"] = f"Detected {primary_type} with {quality} content ({words} words, {doc_potential} documentation potential)"
+    else:
+        analysis["status_message"] = f"Extracted {quality} content with {words} words ({doc_potential} documentation potential)"
     
     return analysis
 
@@ -98,8 +216,29 @@ async def upload(files: List[UploadFile] = File(...), user: User = Depends(get_c
         
         if chunks:
             embeds = unified_client.embed_texts(chunks)
+            
+            # Determine workspace assignment
+            workspace_id = None
+            if user.current_organization_id:
+                # Get user's current workspace from their organization
+                current_workspace = db.query(Workspace).filter(
+                    Workspace.organization_id == user.current_organization_id,
+                    Workspace.is_active == True
+                ).first()
+                if current_workspace:
+                    workspace_id = current_workspace.id
+                    print(f"DEBUG UPLOAD: Assigning snippets to workspace {current_workspace.name} (ID: {workspace_id})")
+            
             for i, (ch, emb) in enumerate(zip(chunks, embeds)):
-                sn = Snippet(user_id=user.id, project="default", path=path, text=ch, embedding=emb)
+                sn = Snippet(
+                    user_id=user.id, 
+                    project="default", 
+                    path=path, 
+                    text=ch, 
+                    embedding=emb,
+                    workspace_id=workspace_id,
+                    is_shared=True  # Default to shared in workspace
+                )
                 db.add(sn)
                 if i < 3:  # Print first 3 chunks for debugging
                     print(f"DEBUG UPLOAD: Chunk {i} (length {len(ch)}): {ch[:200]}...")
@@ -113,9 +252,162 @@ async def upload(files: List[UploadFile] = File(...), user: User = Depends(get_c
 
     return {"ok": True, "files": saved}
 
+@router.post("/generate_async")
+async def generate_async(
+    project: str, title: str, template: str, 
+    description: str = "", model: str = None, system: str = None,
+    user: User = Depends(get_current_user), 
+    db: Session = Depends(get_db)
+):
+    """Queue a document generation request"""
+    import uuid
+    from ..llm.hybrid_queue import hybrid_queue, GenerationRequest, RequestPriority
+    
+    # Determine user priority based on tier
+    user_tier = getattr(user, 'tier', 'free')  # Assuming you have user tiers
+    
+    priority_map = {
+        'enterprise': RequestPriority.CRITICAL,
+        'premium': RequestPriority.HIGH, 
+        'pro': RequestPriority.NORMAL,
+        'free': RequestPriority.LOW
+    }
+    
+    priority = priority_map.get(user_tier, RequestPriority.NORMAL)
+    
+    # Create generation request
+    request_id = str(uuid.uuid4())
+    
+    # Build comprehensive prompt with uploaded content
+    user_source_texts = []
+    try:
+        all_user_snippets = db.query(Snippet).filter_by(user_id=user.id).order_by(Snippet.id.desc()).all()
+        if all_user_snippets:
+            # Use only latest upload
+            latest_path = all_user_snippets[0].path
+            latest_snippets = [s for s in all_user_snippets if s.path == latest_path]
+            user_source_texts = [snippet.text for snippet in latest_snippets if snippet.text and snippet.text.strip()]
+    except Exception as e:
+        logger.error(f"Error fetching snippets: {e}")
+    
+    # Build comprehensive prompt
+    if user_source_texts:
+        content_preview = "\n".join(user_source_texts[:10])  # First 10 chunks
+        full_prompt = f"""
+Generate a {template} document with title "{title}".
+
+Based on the uploaded content below:
+{content_preview}
+
+Description: {description}
+
+Create comprehensive documentation based entirely on the uploaded materials.
+"""
+    else:
+        full_prompt = f"Generate a {template} document with title '{title}'. Description: {description}"
+    
+    gen_request = GenerationRequest(
+        request_id=request_id,
+        user_id=user.id,
+        prompt=full_prompt,
+        model=model or "phi3:mini",
+        priority=priority,
+        template=template,
+        user_tier=user_tier,
+        estimated_duration=len(user_source_texts) * 2 + 30  # Estimate based on content
+    )
+    
+    # Add to queue
+    status, message = await hybrid_queue.add_request(gen_request)
+    
+    if status == "cached":
+        return {
+            "request_id": request_id,
+            "status": "completed",
+            "result": message,
+            "cached": True
+        }
+    elif status == "failed":
+        return {
+            "error": message,
+            "status": "failed"
+        }
+    else:
+        queue_stats = hybrid_queue.get_queue_stats()
+        position = hybrid_queue.get_user_queue_position(user.id, request_id)
+        
+        return {
+            "request_id": request_id,
+            "status": "queued",
+            "queue_position": position,
+            "estimated_wait_time": position * 45,  # 45 seconds per position
+            "queue_stats": queue_stats
+        }
+
+@router.get("/generation_status/{request_id}")
+async def get_generation_status(request_id: str, user: User = Depends(get_current_user)):
+    """Get status of a generation request"""
+    from ..llm.hybrid_queue import hybrid_queue
+    
+    status, result = hybrid_queue.get_request_status(request_id)
+    queue_stats = hybrid_queue.get_queue_stats()
+    position = hybrid_queue.get_user_queue_position(user.id, request_id)
+    
+    response = {
+        "request_id": request_id,
+        "status": status.value,
+        "queue_position": position,
+        "queue_stats": queue_stats
+    }
+    
+    if status.value in ["completed", "failed"]:
+        response["result"] = result
+    
+    if status.value == "queued":
+        response["estimated_wait_time"] = position * 45
+    
+    return response
+
+@router.get("/queue_stats")
+async def get_queue_stats(user: User = Depends(get_current_user)):
+    """Get current queue statistics"""
+    from ..llm.hybrid_queue import hybrid_queue
+    from ..llm.hybrid_client import hybrid_client
+    
+    queue_stats = hybrid_queue.get_queue_stats()
+    health_stats = hybrid_client.get_health_status()
+    
+    return {
+        "queue": queue_stats,
+        "instances": health_stats,
+        "user_active_requests": hybrid_queue.user_active_requests.get(user.id, 0)
+    }
+
+# Keep the old endpoint for backward compatibility but mark as deprecated
 @router.get("/stream_generate")
-def stream_generate(project: str, title: str, template: str, description: str = "", model: str | None = None, system: str | None = None, request: Request = None, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    d = Document(user_id=user.id, title=title, template=template, content=None)
+def stream_generate_legacy(project: str, title: str, template: str, description: str = "", model: str | None = None, system: str | None = None, request: Request = None, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Extract user_id before entering generator scope to avoid SQLAlchemy DetachedInstanceError
+    user_id = user.id
+    
+    # Determine workspace assignment for document
+    workspace_id = None
+    if user.current_organization_id:
+        current_workspace = db.query(Workspace).filter(
+            Workspace.organization_id == user.current_organization_id,
+            Workspace.is_active == True
+        ).first()
+        if current_workspace:
+            workspace_id = current_workspace.id
+            print(f"DEBUG DOCUMENT: Creating document in workspace {current_workspace.name} (ID: {workspace_id})")
+    
+    d = Document(
+        user_id=user_id, 
+        title=title, 
+        template=template, 
+        content=None,
+        workspace_id=workspace_id,
+        is_public_in_workspace=True  # Default to shared in workspace
+    )
     db.add(d); db.commit(); db.refresh(d)
 
     try:
@@ -126,6 +418,10 @@ def stream_generate(project: str, title: str, template: str, description: str = 
     mode = outline.get("mode", "technical document")
     headings = [s.get("heading") for s in outline.get("sections", []) if s.get("heading")]
 
+    # WORKSPACE-AWARE CONTENT FETCHING: Use workspace content if available, fallback to user content
+    print(f"DEBUG PRE-GENERATION: Fetching workspace-aware content for user {user_id}")
+    user_source_texts = _get_workspace_content(user, db)
+
     def gen():
         try:
             enforce_or_raise(db, user, 2000)
@@ -133,20 +429,33 @@ def stream_generate(project: str, title: str, template: str, description: str = 
             yield _sse({"event":"payment_required"}); return
         yield _sse({"event": "start"})
         
+        print(f"DEBUG GENERATION START: User {user_id} has {len(user_source_texts)} preprocessed text snippets")
+        print(f"DEBUG GENERATION START: Generating document '{title}' with template '{template}' for project '{project}'")
+        
         document_content = f"# {title}\n\n"
         total_chars = 0
         
         for idx, heading in enumerate(headings):
             yield _sse({"event": "section_begin", "index": idx, "heading": heading})
+            print(f"DEBUG SECTION START: Processing section {idx} '{heading}' with {len(user_source_texts)} user_source_texts available")
             # RAG: Get ALL relevant snippets from uploaded sources, prioritizing recent uploads
             try:
-                # Search for content related to this section
-                q = f"{heading} {title} {description}"
-                topk = int(os.getenv("RAG_TOPK", "20"))  # Further increased to get more source material
-                hits = search_snippets(db, user.id, "default", q, topk=topk)
+                print(f"DEBUG CRITICAL: About to check user_source_texts - length: {len(user_source_texts) if user_source_texts else 'None'}")
+                print(f"DEBUG CRITICAL: user_source_texts type: {type(user_source_texts)}")
+                print(f"DEBUG CRITICAL: user_source_texts first item preview: {user_source_texts[0][:100] if user_source_texts else 'No items'}")
+                # Search for content related to this section - prioritize section heading over title
+                # Use heading as primary search term since uploaded content should drive the documentation
+                q = f"{heading}"
+                if description.strip():
+                    q += f" {description}"  # Add description if provided as it may contain content-specific terms
+                # Only add title as secondary search term to avoid title-bias
+                q += f" {title.split()[-1]}"  # Use only the last word of title to reduce bias
+                
+                topk = int(os.getenv("RAG_TOPK", "50"))  # Significantly increased for comprehensive coverage
+                hits = search_snippets(db, user_id, "default", q, topk=topk)
                 
                 # Get pinned snippets for this section
-                pinned = db.query(PinnedSnippet).filter_by(user_id=user.id, doc_id=d.id, section_index=idx).all()
+                pinned = db.query(PinnedSnippet).filter_by(user_id=user_id, doc_id=d.id, section_index=idx).all()
                 pinned_texts = []
                 pinned_ids = []
                 for p in pinned:
@@ -155,101 +464,43 @@ def stream_generate(project: str, title: str, template: str, description: str = 
                         pinned_texts.append(sn.text)
                         pinned_ids.append(sn.id)
                 
-                # Get ALL user uploaded content first (recent uploads prioritized)
-                # Try both the requested project and "default" to ensure we find uploaded content
-                all_user_snippets = db.query(Snippet).filter_by(user_id=user.id, project=project).order_by(Snippet.id.desc()).all()
-                if not all_user_snippets:
-                    all_user_snippets = db.query(Snippet).filter_by(user_id=user.id, project="default").order_by(Snippet.id.desc()).all()
-                # Last resort: get ANY snippets for this user regardless of project
-                if not all_user_snippets:
-                    all_user_snippets = db.query(Snippet).filter_by(user_id=user.id).order_by(Snippet.id.desc()).all()
-                print(f"DEBUG: Found {len(all_user_snippets)} snippets for user {user.id} (tried project '{project}', 'default', then any project)")
-                
-                if all_user_snippets:
-                    # If we have uploaded sources, use ONLY those (no external search)
-                    source_texts = [snippet.text for snippet in all_user_snippets]
+                # DIRECT APPROACH: Skip all complex processing and use uploaded content directly
+                if user_source_texts:
+                    print(f"DEBUG DIRECT: Found {len(user_source_texts)} uploaded texts, using them directly")
                     
-                    # Improved relevance scoring with fuzzy matching
-                    scored_sources = []
-                    keywords = [heading.lower(), title.lower()] + [word.lower() for word in heading.split() + title.split() if len(word) > 3]
+                    # Take the first 15 source texts to ensure we have comprehensive content
+                    selected_texts = user_source_texts[:15]
                     
-                    # Add document type keywords for better matching
-                    doc_type_keywords = []
-                    if 'contract' in title.lower() or 'legal' in title.lower():
-                        doc_type_keywords.extend(['agreement', 'contract', 'party', 'parties', 'terms', 'conditions', 'obligations', 'rights', 'liability', 'payment', 'breach', 'termination', 'dispute', 'jurisdiction', 'governing', 'law'])
-                    if 'financial' in title.lower() or 'finance' in title.lower():
-                        doc_type_keywords.extend(['amount', 'payment', 'cost', 'fee', 'expense', 'budget', 'revenue', 'profit', 'loss', 'financial', 'money', 'dollar'])
+                    # Build excerpt directly
+                    excerpt_parts = ["=== UPLOADED CONTENT ==="]
+                    for i, text in enumerate(selected_texts):
+                        if text and text.strip():
+                            excerpt_parts.append(f"\n--- Content Segment {i+1} ---")
+                            excerpt_parts.append(text)
                     
-                    all_keywords = keywords + doc_type_keywords
+                    excerpt = "\n\n".join(excerpt_parts)
+                    print(f"DEBUG DIRECT: Created excerpt with {len(selected_texts)} segments, total length: {len(excerpt)}")
+                    print(f"DEBUG DIRECT: Excerpt preview: {excerpt[:300]}...")
                     
-                    for text in source_texts:
-                        text_lower = text.lower()
-                        score = 0
-                        
-                        # Exact keyword matches
-                        for keyword in all_keywords:
-                            if keyword in text_lower:
-                                score += 2
-                        
-                        # Partial word matches
-                        words = text_lower.split()
-                        for keyword in all_keywords:
-                            for word in words:
-                                if len(word) > 4 and (keyword in word or word in keyword):
-                                    score += 1
-                        
-                        # Base score for any uploaded content (user intent matters)
-                        score += 1
-                        
-                        # Length bonus (longer snippets often have more info)
-                        score += min(len(text) / 500, 2)
-                        
-                        scored_sources.append((text, score))
-                    
-                    # Sort by relevance score and take more content
-                    scored_sources.sort(key=lambda x: x[1], reverse=True)
-                    
-                    # Use all sources if score is low across the board (user uploaded specific content)
-                    # Lower threshold - user uploaded content is always relevant to their chosen template
-                    if not scored_sources or scored_sources[0][1] < 0.5:
-                        relevant_sources = source_texts  # Use ALL uploaded content - user chose this template for a reason
-                    else:
-                        relevant_sources = [text for text, score in scored_sources]  # Use ALL scored content
-                    
-                    # Combine with pinned content
-                    ordered = [*pinned_texts] + relevant_sources
-                    hit_ids = []  # No external hits when using uploaded content
+                    # Set hit_ids for citations
+                    hit_ids = []
                 else:
-                    # No uploaded sources - fall back to search (but this shouldn't happen much)
+                    print(f"DEBUG DIRECT: No user_source_texts available, falling back to search")
+                    # Fallback to search if no uploaded content
                     hit_texts = [txt for (_id, txt, _s, _p) in hits]
                     hit_ids = [_id for (_id, txt, _s, _p) in hits]
-                    ordered = [*pinned_texts] + hit_texts
-                
-                # Remove duplicates while preserving order
-                seen = set()
-                unique = []
-                for s in ordered:
-                    if s and s.strip() and s not in seen:
-                        unique.append(s)
-                        seen.add(s)
-                
-                # Create source excerpt with clear separation
-                if unique:
-                    excerpt = "\n\n=== SOURCE DOCUMENT ===\n".join(unique)
-                    print(f"DEBUG: Using {len(unique)} source excerpts for section '{heading}', total length: {len(excerpt)} chars")
-                    print(f"DEBUG: First excerpt preview: {unique[0][:200]}..." if unique else "")
-                else:
-                    excerpt = "[No source material uploaded - please upload your notes, documents, or images]"
-                    print(f"DEBUG: No source material found for section '{heading}' - all_user_snippets count: {len(all_user_snippets) if all_user_snippets else 0}")
-                    if all_user_snippets:
-                        print(f"DEBUG: Sample snippet text: {all_user_snippets[0].text[:200]}..." if all_user_snippets[0].text else "empty text")
+                    excerpt = "\n".join(hit_texts) if hit_texts else "[No content available]"
                 
                 # emit citation events for pinned and hit snippets
                 for pid in pinned_ids:
                     yield _sse({"event":"cite","snippet_id": pid, "index": idx})
                 for hid in hit_ids[:topk]:
                     yield _sse({"event":"cite","snippet_id": hid, "index": idx})
-            except Exception:
+            except Exception as e:
+                print(f"DEBUG EXCEPTION: Error in section processing: {e}")
+                print(f"DEBUG EXCEPTION: Exception type: {type(e)}")
+                import traceback
+                print(f"DEBUG EXCEPTION: Traceback: {traceback.format_exc()}")
                 excerpt = ""
 
             # Add section heading to document
@@ -257,14 +508,59 @@ def stream_generate(project: str, title: str, template: str, description: str = 
             
             try:
                 section_content = ""
-                # Create source-focused system prompt
-                source_system = "You are a professional document writer who transforms rough notes, handwritten content, and source materials into polished documentation. You ONLY use information provided in the source material and never add external knowledge or assumptions."
-                final_system = f"{source_system}\n\n{system}" if system else source_system
+                # Create content-driven system prompt that ignores title assumptions
+                source_system = """You are an expert documentation specialist who creates documentation based ENTIRELY on uploaded source materials. Your approach is content-driven, meaning you let the actual uploaded content determine what gets documented, not assumptions about document types or titles.
+
+CORE METHODOLOGY:
+- ANALYZE FIRST: Thoroughly examine the uploaded source materials to understand what information is actually available
+- EXTRACT COMPLETELY: Pull out ALL relevant information from the source materials, regardless of whether it fits typical expectations
+- DOCUMENT WHAT EXISTS: Create documentation based on what's actually in the uploaded files, not what "should" be there
+- IGNORE PRECONCEPTIONS: Don't assume what content should be present based on document titles or types
+
+YOUR SPECIALTIES:
+- Converting rough notes, handwritten content, meeting minutes, and fragmented documents into polished documentation
+- Extracting structured information from unstructured sources (OCR text, handwritten notes, informal documents)
+- Recognizing and preserving ALL technical details, specifications, procedures, names, dates, and numbers exactly as provided
+- Creating comprehensive documentation from partial or incomplete source materials
+- Maintaining absolute fidelity to source content while improving presentation and organization
+
+CONTENT-DRIVEN RULES:
+1. BASE EVERYTHING on the uploaded source material - never add external knowledge or assumptions
+2. EXTRACT ALL information that could be relevant, even if it seems incomplete, fragmented, or doesn't fit typical patterns
+3. PRESERVE EXACT details (numbers, names, procedures, specifications, dates) exactly as they appear in source materials
+4. CREATE SECTIONS based on what content is actually available, not on what typical documents contain
+5. INDICATE CLEARLY when information is limited: "Based on the uploaded materials..." or "The source documents contain..."
+6. TRANSFORM rough content into professional language while maintaining complete fidelity to the original meaning and facts"""
+
+                # Add contract-specific instructions for legal templates
+                contract_addition = ""
+                if template in ['legal_contract_analysis', 'uploaded_contract_analysis'] or 'legal' in template or 'contract' in template:
+                    contract_addition = "\n\nSPECIAL INSTRUCTIONS FOR CONTRACT ANALYSIS: You are analyzing an actual uploaded contract document. Focus on extracting the specific terms, conditions, obligations, and details that are actually written in this contract. Do not add standard legal language or typical contract provisions that are not present in the uploaded document. Extract exact payment amounts, specific dates, precise job duties, actual benefit details, and verbatim contract clauses as they appear in the source material."
                 
+                final_system = f"{source_system}{contract_addition}\n\n{system}" if system else f"{source_system}{contract_addition}"
+                
+                # FORCE uploaded content usage - bypass all search logic
+                if user_source_texts:
+                    # Create a comprehensive excerpt from ALL uploaded content
+                    forced_excerpt = "=== ALL UPLOADED CONTENT ===\n\n"
+                    for i, content in enumerate(user_source_texts[:20]):  # Use first 20 chunks
+                        if content and content.strip():
+                            forced_excerpt += f"--- Segment {i+1} ---\n{content}\n\n"
+                    
+                    print(f"DEBUG FORCE: Using forced excerpt with {len(forced_excerpt)} characters")
+                    print(f"DEBUG FORCE: Excerpt preview: {forced_excerpt[:200]}...")
+                    excerpt = forced_excerpt
+                
+                print(f"DEBUG LLM START: About to call stream_section for '{heading}' with {len(excerpt)} chars")
+                token_count = 0
                 for tok in stream_section(mode=mode, title=title, heading=heading, user_context="", source_excerpt=excerpt, model=model, system=final_system):
+                    token_count += 1
+                    if token_count <= 5:
+                        print(f"DEBUG LLM TOKEN {token_count}: '{tok}'")
                     yield _sse({"event": "token", "text": tok})
                     total_chars += len(tok)
                     section_content += tok
+                print(f"DEBUG LLM END: Generated {token_count} tokens for section '{heading}'")
                 document_content += section_content + "\n\n"
             except Exception as e:
                 error_msg = f"\n[Generation error: {e}]\n"

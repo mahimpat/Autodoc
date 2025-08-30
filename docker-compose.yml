@@ -60,6 +60,7 @@ services:
       ollama:
         condition: service_started
     volumes:
+      - ./backend/app:/app/app  # Mount source code for hot reload
       - ./templates:/app/templates
       - ./_local_store:/app/_local_store
       - ./uploads:/app/uploads
@@ -84,6 +85,10 @@ services:
     environment:
       - NEXT_PUBLIC_API_BASE=${NEXT_PUBLIC_API_BASE:-http://localhost:8000}
       - NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY}
+    volumes:
+      - ./frontend:/app  # Mount source code for hot reload
+      - /app/node_modules  # Exclude node_modules
+      - /app/.next  # Exclude .next build files
     depends_on: [ api ]
     ports:
       - "3000:3000"

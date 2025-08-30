@@ -9,6 +9,7 @@ import StatusBar from '../../../components/StatusBar';
 import ResizableShell from '../../../components/ResizableShell';
 import SourcesPanel from '../../../components/SourcesPanel';
 import PaywallModal from '../../../components/PaywallModal';
+import DocumentActions from '../../../components/DocumentActions';
 import { useDocStore } from '../../../store/useDocStore';
 import { API_BASE, api } from '../../../lib/api';
 import { SSEStream } from '../../../lib/sse';
@@ -17,7 +18,7 @@ export default function DocStudio() {
   const params = useParams();
   const id = Number(params?.id);
   const { outline, setOutline, setActiveIndex } = useDocStore();
-  const [model, setModel] = useState('mistral:7b');
+  const [model, setModel] = useState('llama3.1:8b-instruct-q4_0');
   const [system, setSystem] = useState('');
   const [live, setLive] = useState(false);
   const [paywall, setPaywall] = useState(false);
@@ -81,8 +82,9 @@ export default function DocStudio() {
                 <OutlineList />
                 <div className="mt-3 flex items-center gap-2">
                   <select className="input" value={model} onChange={e=>setModel(e.target.value)}>
-                    <option>mistral:7b</option>
-                    <option>llama3:instruct</option>
+                    <option value="llama3.1:8b-instruct-q4_0">Llama 3.1 8B Instruct</option>
+                    <option value="mistral:7b">Mistral 7B</option>
+                    <option value="phi3:mini">Phi-3 Mini</option>
                   </select>
                 </div>
                 <div className="mt-2"><input className="input w-full" placeholder="System prompt (optional)" value={system} onChange={e=>setSystem(e.target.value)} /></div>
@@ -90,9 +92,12 @@ export default function DocStudio() {
                   <button className="btn btn-primary" onClick={()=>startRegen(0)}>Regen current</button>
                   <button className="btn" onClick={cancel}>Cancel</button>
                 </div>
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <a className="btn" href={`${API_BASE}/documents/${id}.md`} target="_blank">Export MD</a>
-                  <a className="btn" href={`${API_BASE}/documents/${id}.pdf`} target="_blank">Export PDF</a>
+                <div className="mt-3">
+                  <div className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-400">Export Options</div>
+                  <DocumentActions 
+                    documentId={id} 
+                    documentTitle={outline?.title || 'Document'} 
+                  />
                 </div>
               </div>
             </div>

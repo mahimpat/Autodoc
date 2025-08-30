@@ -22,7 +22,7 @@ export default function CommandMenu() {
       <KBarPositioner className="z-50 bg-black/40 backdrop-blur-sm">
         <KBarAnimator className="w-full max-w-xl bg-white dark:bg-zinc-900 rounded-2xl shadow-lg overflow-hidden">
           <KBarSearch className="w-full p-4 bg-transparent outline-none text-base" placeholder="Type a command…" />
-          <KBarResults items={[]} onRender={() => null} />
+          <KBarResults items={[]} onRender={({ item }) => <div>{typeof item === 'string' ? item : item.name}</div>} />
         </KBarAnimator>
       </KBarPositioner>
     </KBarPortal>

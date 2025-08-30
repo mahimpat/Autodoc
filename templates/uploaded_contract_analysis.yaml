@@ -1,0 +1,26 @@
+mode: Uploaded Contract Analysis
+metadata:
+  required:
+    - title
+    - source_contract
+  optional:
+    - analysis_date
+    - contract_type
+    - parties_involved
+sections:
+  - title: Contract Overview
+    hint: Overview of the contract based on what's actually in the uploaded document - parties, purpose, and key elements found.
+  - title: Terms and Conditions Found
+    hint: Specific terms, conditions, and clauses identified in the uploaded contract document.
+  - title: Obligations and Responsibilities
+    hint: Obligations, duties, and responsibilities of each party as stated in the uploaded contract.
+  - title: Payment and Financial Terms
+    hint: Payment amounts, schedules, financial obligations, and monetary terms found in the contract.
+  - title: Timeline and Duration
+    hint: Contract duration, deadlines, milestones, and time-related provisions from the uploaded document.
+  - title: Rights and Benefits
+    hint: Rights, benefits, entitlements, and privileges granted to parties as specified in the contract.
+  - title: Termination and Cancellation
+    hint: Termination clauses, cancellation procedures, and end-of-contract provisions found in the document.
+  - title: Additional Provisions
+    hint: Any other important clauses, special conditions, or provisions identified in the uploaded contract.

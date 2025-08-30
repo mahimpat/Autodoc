@@ -18,12 +18,31 @@ import {
   FolderIcon,
   PhotoIcon,
   FilmIcon,
-  ChartBarIcon
+  ChartBarIcon,
+  ScaleIcon,
+  HeartIcon,
+  BanknotesIcon,
+  MagnifyingGlassIcon,
+  UsersIcon,
+  BuildingLibraryIcon
 } from '@heroicons/react/24/outline';
-import Header from '../../components/Header';
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Badge, Progress } from '../../components/ui';
+import { Button } from '../../components/ui/Button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
+import { Input } from '../../components/ui/Input';
+import { Badge } from '../../components/ui/Badge';
+import { Progress } from '../../components/ui/Progress';
+import { Skeleton } from '../../components/ui/Skeleton';
+import { useToast } from '../../components/ui/Toast';
 import { API_BASE } from '../../lib/api';
 import { SSEStream } from '../../lib/sse';
+import { WorkspaceCard } from '../../components/WorkspaceCard';
+import Header from '../../components/Header';
+import { EmptyState } from '../../components/EmptyState';
+import { useWorkspace } from '../../lib/workspace-context';
+import { TeamManagement } from '../../components/TeamManagement';
+import { SharedDocumentLibrary } from '../../components/SharedDocumentLibrary';
+import { GenerationContextInfo } from '../../components/GenerationContextInfo';
+import StreamingRichTextEditor from '../../components/StreamingRichTextEditor';
 
 interface UploadedFile {
   id: string;
@@ -43,7 +62,36 @@ interface GenerationProgress {
 }
 
 const templateCategories = {
-  general: [
+  uploaded: [
+    {
+      id: 'content_driven_docs',
+      name: 'Content-Driven Documentation',
+      description: 'Generate documentation based entirely on your uploaded content - lets your files determine the structure',
+      icon: <CloudArrowUpIcon className="w-6 h-6" />,
+      color: 'from-indigo-500 to-purple-500',
+      badge: 'NEW',
+      sections: ['Content Overview', 'Key Information', 'Procedures', 'Technical Details', 'Data & Measurements', 'Decisions', 'Additional Context', 'Source Summary']
+    },
+    {
+      id: 'uploaded_content_docs',
+      name: 'Uploaded Content Documentation',
+      description: 'Flexible documentation template that adapts to any type of uploaded content',
+      icon: <DocumentTextIcon className="w-6 h-6" />,
+      color: 'from-blue-500 to-indigo-500',
+      badge: 'FLEX',
+      sections: ['Executive Summary', 'Background & Context', 'Key Information', 'Detailed Analysis', 'Procedures', 'Requirements', 'Conclusions', 'References']
+    },
+    {
+      id: 'uploaded_contract_analysis',
+      name: 'Contract Analysis (Upload-Based)',
+      description: 'Analyze uploaded contracts - extracts actual terms, conditions, and obligations from your contract files',
+      icon: <DocumentTextIcon className="w-6 h-6" />,
+      color: 'from-slate-500 to-gray-600',
+      badge: 'CONTRACT',
+      sections: ['Contract Overview', 'Terms Found', 'Obligations', 'Payment Terms', 'Timeline', 'Rights & Benefits', 'Termination', 'Additional Provisions']
+    }
+  ],
+  technical: [
     {
       id: 'tdd',
       name: 'Technical Design Document',
@@ -52,6 +100,44 @@ const templateCategories = {
       color: 'from-blue-500 to-indigo-500',
       badge: 'TDD',
       sections: ['Problem Statement', 'Goals & Objectives', 'Architecture', 'Implementation', 'Testing', 'Deployment']
+    },
+    {
+      id: 'technical_documentation',
+      name: 'Technical Documentation',
+      description: 'Professional technical docs from uploaded specs, guides, and technical content',
+      icon: <CogIcon className="w-6 h-6" />,
+      color: 'from-cyan-500 to-blue-500',
+      badge: 'TECH',
+      sections: ['Overview', 'Requirements', 'Architecture', 'Installation', 'Configuration', 'Usage', 'API Reference', 'Troubleshooting']
+    },
+    {
+      id: 'api_library_docs',
+      name: 'API & Library Documentation',
+      description: 'Complete API reference with endpoints, examples, and integration guides',
+      icon: <DocumentTextIcon className="w-6 h-6" />,
+      color: 'from-orange-500 to-red-500',
+      badge: 'API',
+      sections: ['Overview', 'Authentication', 'Endpoints', 'Examples', 'SDKs', 'Troubleshooting']
+    },
+    {
+      id: 'readme_changelog',
+      name: 'README + Changelog',
+      description: 'Project documentation with installation guide, usage examples, and version history',
+      icon: <BookOpenIcon className="w-6 h-6" />,
+      color: 'from-emerald-500 to-teal-500',
+      badge: 'OSS',
+      sections: ['Introduction', 'Installation', 'Usage', 'Configuration', 'Contributing', 'Changelog']
+    }
+  ],
+  project: [
+    {
+      id: 'project_documentation',
+      name: 'Project Documentation',
+      description: 'Comprehensive project docs from uploaded planning materials, meeting notes, and requirements',
+      icon: <FolderIcon className="w-6 h-6" />,
+      color: 'from-green-500 to-emerald-500',
+      badge: 'PROJ',
+      sections: ['Project Overview', 'Requirements', 'Timeline & Milestones', 'Team & Responsibilities', 'Technical Implementation', 'Risk Management', 'Progress & Status', 'Next Steps']
     },
     {
       id: 'research_report',
@@ -63,30 +149,21 @@ const templateCategories = {
       sections: ['Abstract', 'Introduction', 'Methodology', 'Results', 'Discussion', 'References']
     },
     {
-      id: 'readme_changelog',
-      name: 'README + Changelog',
-      description: 'Project documentation with installation guide, usage examples, and version history',
-      icon: <BookOpenIcon className="w-6 h-6" />,
-      color: 'from-emerald-500 to-teal-500',
-      badge: 'OSS',
-      sections: ['Introduction', 'Installation', 'Usage', 'Configuration', 'Contributing', 'Changelog']
-    },
-    {
-      id: 'api_library_docs',
-      name: 'API & Library Documentation',
-      description: 'Complete API reference with endpoints, examples, and integration guides',
-      icon: <DocumentTextIcon className="w-6 h-6" />,
-      color: 'from-orange-500 to-red-500',
-      badge: 'API',
-      sections: ['Overview', 'Authentication', 'Endpoints', 'Examples', 'SDKs', 'Troubleshooting']
+      id: 'experiment_record',
+      name: 'Experiment Record',
+      description: 'Scientific experiment documentation with procedures, data, and analysis',
+      icon: <BeakerIcon className="w-6 h-6" />,
+      color: 'from-violet-500 to-purple-500',
+      badge: 'EXP',
+      sections: ['Experiment Overview', 'Hypothesis', 'Materials & Methods', 'Data Collection', 'Results', 'Analysis', 'Conclusions']
     }
   ],
   legal: [
     {
       id: 'legal_contract_analysis',
-      name: 'Contract Analysis',
-      description: 'Detailed contract review with risk assessment and recommendations',
-      icon: <DocumentTextIcon className="w-6 h-6" />,
+      name: 'Contract Analysis (Classic)',
+      description: 'Traditional legal contract analysis with standard legal sections and frameworks',
+      icon: <ScaleIcon className="w-6 h-6" />,
       color: 'from-slate-600 to-slate-800',
       badge: 'LEG',
       sections: ['Executive Summary', 'Parties & Background', 'Key Terms', 'Risk Assessment', 'Recommendations']
@@ -104,7 +181,7 @@ const templateCategories = {
       id: 'legal_compliance_audit',
       name: 'Compliance Audit',
       description: 'Regulatory compliance assessment with gap analysis and remediation plan',
-      icon: <SparklesIcon className="w-6 h-6" />,
+      icon: <DocumentTextIcon className="w-6 h-6" />,
       color: 'from-gray-600 to-gray-800',
       badge: 'COMP',
       sections: ['Audit Scope', 'Regulatory Framework', 'Gap Analysis', 'Recommendations']
@@ -115,7 +192,7 @@ const templateCategories = {
       id: 'medical_clinical_study',
       name: 'Clinical Study Report',
       description: 'Comprehensive clinical trial documentation with results and analysis',
-      icon: <BeakerIcon className="w-6 h-6" />,
+      icon: <HeartIcon className="w-6 h-6" />,
       color: 'from-red-500 to-pink-600',
       badge: 'CLN',
       sections: ['Study Synopsis', 'Objectives', 'Methods', 'Results', 'Safety', 'Conclusions']
@@ -153,7 +230,7 @@ const templateCategories = {
       id: 'finance_investment_analysis',
       name: 'Investment Analysis',
       description: 'Investment evaluation with financial analysis, valuation, and recommendations',
-      icon: <SparklesIcon className="w-6 h-6" />,
+      icon: <BanknotesIcon className="w-6 h-6" />,
       color: 'from-emerald-600 to-green-700',
       badge: 'INV',
       sections: ['Investment Thesis', 'Financial Analysis', 'Valuation', 'Risk Analysis', 'Recommendation']
@@ -170,10 +247,15 @@ const templateCategories = {
   ]
 };
 
+type TabType = 'generate' | 'team' | 'documents';
+
 export default function Studio() {
   const router = useRouter();
-  const [selectedCategory, setSelectedCategory] = useState('general');
-  const [selectedTemplate, setSelectedTemplate] = useState(templateCategories.general[0]);
+  const { addToast } = useToast();
+  const { currentWorkspace, isLoading: workspaceLoading } = useWorkspace();
+  const [activeTab, setActiveTab] = useState<TabType>('generate');
+  const [selectedCategory, setSelectedCategory] = useState('uploaded');
+  const [selectedTemplate, setSelectedTemplate] = useState(templateCategories.uploaded[0]);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
@@ -186,6 +268,15 @@ export default function Studio() {
   const [generatedContent, setGeneratedContent] = useState('');
   const [currentDocId, setCurrentDocId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [isStreamPaused, setIsStreamPaused] = useState(false);
+  const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [contentAnalysis, setContentAnalysis] = useState<any>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [showAnalysis, setShowAnalysis] = useState(false);
+  const [documentSynthesis, setDocumentSynthesis] = useState<any>(null);
+  const [contentGaps, setContentGaps] = useState<any>(null);
+  const [isSynthesizing, setIsSynthesizing] = useState(false);
+  const [activeAnalysisTab, setActiveAnalysisTab] = useState<'analysis' | 'synthesis' | 'gaps'>('analysis');
 
   // Load available models on component mount
   useEffect(() => {
@@ -207,6 +298,104 @@ export default function Studio() {
       }
     };
     loadModels();
+  }, []);
+
+  // Analyze content when files are uploaded
+  const analyzeUploadedContent = async () => {
+    const uploadedFiles = files.filter(f => f.status === 'uploaded');
+    if (uploadedFiles.length === 0) {
+      setContentAnalysis(null);
+      setDocumentSynthesis(null);
+      setContentGaps(null);
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setIsSynthesizing(true);
+    
+    try {
+      // Run all analyses in parallel
+      const [analysisResponse, synthesisResponse, gapsResponse] = await Promise.all([
+        fetch(`${API_BASE}/intelligence/analyze_content`, {
+          method: 'POST',
+          credentials: 'include'
+        }),
+        uploadedFiles.length > 1 ? fetch(`${API_BASE}/intelligence/synthesize_documents`, {
+          method: 'POST',
+          credentials: 'include'
+        }) : Promise.resolve(null),
+        uploadedFiles.length > 1 ? fetch(`${API_BASE}/intelligence/content_gaps`, {
+          credentials: 'include'
+        }) : Promise.resolve(null)
+      ]);
+
+      // Process analysis response
+      if (analysisResponse.ok) {
+        const analysis = await analysisResponse.json();
+        setContentAnalysis(analysis);
+        
+        // Auto-suggest best template if confidence is high
+        if (analysis.template_recommendations && analysis.template_recommendations.length > 0) {
+          const bestTemplate = analysis.template_recommendations[0];
+          if (bestTemplate.confidence > 0.7) {
+            // Find the template in our categories
+            for (const [categoryKey, templates] of Object.entries(templateCategories)) {
+              const foundTemplate = templates.find(t => t.id === bestTemplate.template_id);
+              if (foundTemplate) {
+                setSelectedCategory(categoryKey);
+                setSelectedTemplate(foundTemplate);
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      // Process synthesis response (only for multiple files)
+      if (synthesisResponse && synthesisResponse.ok) {
+        const synthesis = await synthesisResponse.json();
+        setDocumentSynthesis(synthesis);
+      } else if (uploadedFiles.length === 1) {
+        setDocumentSynthesis({ 
+          status: "single_file", 
+          message: "Upload multiple files to see document synthesis analysis" 
+        });
+      }
+
+      // Process gaps response (only for multiple files)
+      if (gapsResponse && gapsResponse.ok) {
+        const gaps = await gapsResponse.json();
+        setContentGaps(gaps);
+      } else if (uploadedFiles.length === 1) {
+        setContentGaps({ 
+          status: "single_file", 
+          message: "Upload multiple files to see content gap analysis" 
+        });
+      }
+
+    } catch (error) {
+      console.error('Content intelligence analysis failed:', error);
+    } finally {
+      setIsAnalyzing(false);
+      setIsSynthesizing(false);
+    }
+  };
+
+  // Trigger analysis when uploaded files change
+  useEffect(() => {
+    const uploadedFiles = files.filter(f => f.status === 'uploaded');
+    if (uploadedFiles.length > 0 && !isAnalyzing) {
+      // Delay analysis slightly to ensure all files are processed
+      const timer = setTimeout(() => {
+        analyzeUploadedContent();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [files.filter(f => f.status === 'uploaded').length]);
+
+  const handleFileUpload = useCallback(async (fileList: FileList) => {
+    const acceptedFiles = Array.from(fileList);
+    await onDrop(acceptedFiles);
   }, []);
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
@@ -326,9 +515,52 @@ export default function Studio() {
     setFiles(prev => prev.filter(f => f.id !== id));
   };
 
+  const pauseGeneration = () => {
+    if (sseStream) {
+      sseStream.stop();
+      setSseStream(null);
+    }
+    setIsStreamPaused(true);
+  };
+
+  const resumeGeneration = () => {
+    // Note: True stream resume would require backend support
+    // For now, we'll just allow editing
+    setIsStreamPaused(false);
+    setIsEditing(true);
+  };
+
+  const stopGeneration = () => {
+    if (sseStream) {
+      sseStream.stop();
+      setSseStream(null);
+    }
+    setIsGenerating(false);
+    setGenerationProgress(null);
+    setIsStreamPaused(false);
+  };
+
+  const handleContentChange = (content: string) => {
+    setGeneratedContent(content);
+    // Auto-save after a short delay to avoid too frequent saves
+    if (currentDocId) {
+      if (saveTimeout) {
+        clearTimeout(saveTimeout);
+      }
+      const newTimeout = setTimeout(() => {
+        saveDocument();
+      }, 2000); // Save 2 seconds after last edit
+      setSaveTimeout(newTimeout);
+    }
+  };
+
   const startGeneration = async () => {
     if (!title.trim()) {
-      alert('Please enter a title for your document');
+      addToast({
+        title: 'Title Required',
+        description: 'Please enter a title for your document',
+        variant: 'warning'
+      });
       return;
     }
 
@@ -396,6 +628,11 @@ export default function Studio() {
           progress: 100,
           message: 'Document generated successfully!'
         });
+        addToast({
+          title: 'Document Generated',
+          description: 'Your document has been generated successfully',
+          variant: 'success'
+        });
         setTimeout(() => {
           setIsGenerating(false);
           setGenerationProgress(null);
@@ -416,21 +653,16 @@ export default function Studio() {
         setIsGenerating(false);
         setGenerationProgress(null);
         stream.stop();
-        alert('Generation failed: ' + (event.message || 'Unknown error'));
+        addToast({
+          title: 'Generation Failed',
+          description: event.message || 'Unknown error occurred',
+          variant: 'destructive'
+        });
       }
     });
 
     setSseStream(stream);
     stream.start();
-  };
-
-  const stopGeneration = () => {
-    if (sseStream) {
-      sseStream.stop();
-      setSseStream(null);
-    }
-    setIsGenerating(false);
-    setGenerationProgress(null);
   };
 
   const saveDocument = async () => {
@@ -472,61 +704,124 @@ export default function Studio() {
   };
 
   return (
-    <div className="min-h-screen relative">
-      <div className="aurora fixed inset-0 pointer-events-none" />
+    <div className="min-h-screen bg-background relative overflow-hidden">
+      <div className="premium-bg" />
       <Header />
       
-      <main className="relative z-10 max-w-7xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight bg-gradient-to-r from-gray-900 via-purple-900 to-gray-900 dark:from-white dark:via-purple-300 dark:to-white bg-clip-text text-transparent mb-4">
+      <main className="relative z-10 max-w-7xl mx-auto px-6 py-6 space-y-6 animate-fade-in-up">
+        {/* Studio Title */}
+        <div className="text-center mb-8">
+          <h1 className="text-5xl font-bold bg-gradient-to-r from-violet-400 via-cyan-400 to-emerald-400 bg-clip-text text-transparent mb-6 animate-gradient-x bg-300% leading-tight">
             Document Generation Studio
           </h1>
-          <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
-            Upload your sources, choose a template, and generate professional documentation powered by AI
+          <p className="text-muted-foreground text-xl max-w-3xl mx-auto leading-relaxed opacity-90">
+            Transform your ideas into beautiful documentation with AI-powered generation and premium templates
           </p>
         </div>
+        {/* Workspace Section */}
+        <div className="space-y-6">
+          <WorkspaceCard workspace={currentWorkspace || undefined} isLoading={workspaceLoading} />
+        </div>
 
-        <div className="grid lg:grid-cols-3 gap-8">
+        {/* Tab Navigation */}
+        <div className="flex space-x-2 bg-card/60 p-3 rounded-2xl border border-border backdrop-blur-xl shadow-2xl animate-scale-in">
+          <button
+            onClick={() => setActiveTab('generate')}
+            className={`flex-1 flex items-center justify-center gap-3 px-6 py-4 rounded-xl font-medium transition-all duration-300 ${
+              activeTab === 'generate'
+                ? 'bg-primary text-primary-foreground shadow-xl shadow-primary/30 transform -translate-y-1 scale-105'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:shadow-lg hover:-translate-y-0.5'
+            }`}
+          >
+            <SparklesIcon className="w-4 h-4" />
+            Generate
+          </button>
+          <button
+            onClick={() => setActiveTab('documents')}
+            className={`flex-1 flex items-center justify-center gap-3 px-6 py-4 rounded-xl font-medium transition-all duration-300 ${
+              activeTab === 'documents'
+                ? 'bg-violet-500 text-white shadow-xl shadow-violet-500/30 transform -translate-y-1 scale-105'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:shadow-lg hover:-translate-y-0.5'
+            }`}
+          >
+            <BuildingLibraryIcon className="w-4 h-4" />
+            Library
+          </button>
+          <button
+            onClick={() => setActiveTab('team')}
+            className={`flex-1 flex items-center justify-center gap-3 px-6 py-4 rounded-xl font-medium transition-all duration-300 ${
+              activeTab === 'team'
+                ? 'bg-emerald-500 text-white shadow-xl shadow-emerald-500/30 transform -translate-y-1 scale-105'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:shadow-lg hover:-translate-y-0.5'
+            }`}
+          >
+            <UsersIcon className="w-4 h-4" />
+            Team
+          </button>
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === 'generate' && (
+          <>
+            {/* Generation Context Info */}
+            <div className="mb-8">
+              <GenerationContextInfo 
+                uploadedFilesCount={files.filter(f => f.status === 'uploaded').length}
+                isGenerating={isGenerating}
+              />
+            </div>
+
+            <div className="grid lg:grid-cols-3 gap-8">
           {/* Left Column - Templates & Configuration */}
           <div className="lg:col-span-1 space-y-6">
             {/* Template Selection */}
-            <Card variant="glass">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+            <Card className="card animate-fade-in-up">
+              <CardHeader className="p-6">
+                <CardTitle className="flex items-center gap-2 text-card-foreground">
                   <SparklesIcon className="w-5 h-5" />
                   Choose Template
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className="text-muted-foreground">
                   Select industry and document type
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* Category Selection */}
                 <div>
-                  <label className="block text-sm font-medium mb-2">Industry</label>
+                  <label className="block text-sm font-medium mb-2">Template Category</label>
                   <div className="grid grid-cols-2 gap-2">
-                    {Object.entries(templateCategories).map(([categoryKey, templates]) => (
-                      <button
-                        key={categoryKey}
-                        onClick={() => {
-                          setSelectedCategory(categoryKey);
-                          setSelectedTemplate(templates[0]);
-                        }}
-                        className={`p-3 rounded-lg border-2 text-left transition-all ${
-                          selectedCategory === categoryKey
-                            ? 'border-brand-500 bg-brand-50/50 dark:bg-brand-950/50'
-                            : 'border-white/20 dark:border-white/10 hover:border-brand-300 dark:hover:border-brand-700'
-                        }`}
-                      >
-                        <div className="font-medium text-gray-900 dark:text-white capitalize">
-                          {categoryKey}
-                        </div>
-                        <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                          {templates.length} templates
-                        </div>
-                      </button>
-                    ))}
+                    {Object.entries(templateCategories).map(([categoryKey, templates]) => {
+                      const categoryLabels = {
+                        uploaded: 'Upload-Based',
+                        technical: 'Technical',
+                        project: 'Project & Research',
+                        legal: 'Legal',
+                        medical: 'Medical',
+                        finance: 'Finance'
+                      };
+                      
+                      return (
+                        <button
+                          key={categoryKey}
+                          onClick={() => {
+                            setSelectedCategory(categoryKey);
+                            setSelectedTemplate(templates[0]);
+                          }}
+                          className={`p-3 rounded-lg border text-left transition-all ${
+                            selectedCategory === categoryKey
+                              ? 'border-blue-500 bg-blue-500/10'
+                              : 'border-slate-600 hover:border-slate-500'
+                          }`}
+                        >
+                          <div className="font-medium text-slate-100">
+                            {categoryLabels[categoryKey as keyof typeof categoryLabels] || categoryKey}
+                          </div>
+                          <div className="text-xs text-slate-400 mt-1">
+                            {templates.length} templates
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -537,10 +832,10 @@ export default function Studio() {
                     {templateCategories[selectedCategory as keyof typeof templateCategories].map((template) => (
                       <div
                         key={template.id}
-                        className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                        className={`p-4 rounded-xl border cursor-pointer transition-all ${
                           selectedTemplate.id === template.id
-                            ? 'border-brand-500 bg-brand-50/50 dark:bg-brand-950/50'
-                            : 'border-white/20 dark:border-white/10 hover:border-brand-300 dark:hover:border-brand-700'
+                            ? 'border-blue-500 bg-blue-500/10'
+                            : 'border-slate-600 hover:border-slate-500'
                         }`}
                         onClick={() => setSelectedTemplate(template)}
                       >
@@ -549,10 +844,10 @@ export default function Studio() {
                             {template.icon}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <h3 className="font-medium text-gray-900 dark:text-white mb-1">
+                            <h3 className="font-medium text-slate-100 mb-1">
                               {template.name}
                             </h3>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                            <p className="text-sm text-slate-400">
                               {template.description}
                             </p>
                           </div>
@@ -565,9 +860,9 @@ export default function Studio() {
             </Card>
 
             {/* Configuration */}
-            <Card variant="glass">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+            <Card className="card animate-fade-in-up">
+              <CardHeader className="p-6">
+                <CardTitle className="flex items-center gap-2 text-card-foreground">
                   <CogIcon className="w-5 h-5" />
                   Configuration
                 </CardTitle>
@@ -637,15 +932,15 @@ export default function Studio() {
           {/* Right Column - Document Setup & Files */}
           <div className="lg:col-span-2 space-y-6">
             {/* Document Details */}
-            <Card variant="glass">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+            <Card className="card animate-fade-in-up">
+              <CardHeader className="p-6">
+                <CardTitle className="flex items-center gap-2 text-card-foreground">
                   <div className={`w-6 h-6 rounded bg-gradient-to-r ${selectedTemplate.color} flex items-center justify-center text-white text-xs font-bold`}>
                     {selectedTemplate.badge}
                   </div>
                   {selectedTemplate.name}
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className="text-muted-foreground">
                   Configure your document details
                 </CardDescription>
               </CardHeader>
@@ -686,9 +981,9 @@ export default function Studio() {
             </Card>
 
             {/* File Upload */}
-            <Card variant="glass">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+            <Card className="card animate-fade-in-up">
+              <CardHeader className="p-6">
+                <CardTitle className="flex items-center gap-2 text-card-foreground">
                   <CloudArrowUpIcon className="w-5 h-5" />
                   Source Files
                 </CardTitle>
@@ -699,23 +994,28 @@ export default function Studio() {
                       {' '}Upload source files to generate documentation based on your actual content.
                     </span>
                   )}
+                  {selectedCategory === 'uploaded' && (
+                    <span className="text-green-600 dark:text-green-400 font-medium block mt-2">
+                      ✨ Using upload-based template - your content will drive the documentation structure!
+                    </span>
+                  )}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div
                   {...getRootProps()}
-                  className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer ${
+                  className={`border border-dashed rounded-2xl p-8 text-center transition-colors cursor-pointer ${
                     isDragActive
-                      ? 'border-brand-500 bg-brand-50/50 dark:bg-brand-950/50'
-                      : 'border-white/30 dark:border-white/20 hover:border-brand-300 dark:hover:border-brand-700'
+                      ? 'border-blue-500 bg-blue-500/10'
+                      : 'border-slate-600 hover:border-slate-500'
                   }`}
                 >
                   <input {...getInputProps()} />
-                  <CloudArrowUpIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600 dark:text-gray-400 mb-2">
+                  <CloudArrowUpIcon className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                  <p className="text-slate-300 mb-2">
                     {isDragActive ? 'Drop files here...' : 'Drag & drop files here, or click to browse'}
                   </p>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-slate-400">
                     Supports PDF, DOC, TXT, MD, images, and more
                   </p>
                 </div>
@@ -723,19 +1023,19 @@ export default function Studio() {
                 {/* Uploaded Files */}
                 {files.length > 0 && (
                   <div className="mt-6 space-y-3">
-                    <h4 className="font-medium text-gray-900 dark:text-white">
+                    <h4 className="font-medium text-slate-100">
                       Uploaded Files ({files.length})
                     </h4>
                     {files.map((file) => (
-                      <div key={file.id} className="flex items-center gap-3 p-3 rounded-lg bg-white/30 dark:bg-white/5">
-                        <div className="text-gray-600 dark:text-gray-400">
+                      <div key={file.id} className="flex items-center gap-3 p-3 rounded-lg bg-slate-700/30">
+                        <div className="text-slate-400">
                           {getFileIcon(file.type)}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-gray-900 dark:text-white truncate">
+                          <p className="font-medium text-slate-100 truncate">
                             {file.name}
                           </p>
-                          <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+                          <div className="flex items-center gap-4 text-sm text-slate-400">
                             <span>{formatFileSize(file.size)}</span>
                             <Badge
                               variant={
@@ -799,14 +1099,14 @@ export default function Studio() {
 
             {/* Generation Progress */}
             {isGenerating && generationProgress && (
-              <Card variant="glass" className="border-brand-500/50">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <SparklesIcon className="w-5 h-5 animate-pulse text-brand-500" />
+              <Card className="bg-slate-800/50 border-blue-500/50 rounded-2xl">
+                <CardHeader className="p-6">
+                  <CardTitle className="flex items-center gap-2 text-card-foreground">
+                    <SparklesIcon className="w-5 h-5 animate-pulse text-blue-500" />
                     Generating Document
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-6 pt-0">
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
                       <span className="text-sm font-medium">{generationProgress.stage}</span>
@@ -856,90 +1156,619 @@ export default function Studio() {
               )}
               
               {files.filter(f => f.status === 'uploaded').length > 0 && (
-                <Button variant="outline" size="lg">
+                <Button 
+                  variant="outline" 
+                  size="lg"
+                  onClick={() => setShowAnalysis(!showAnalysis)}
+                  className="border-slate-600 hover:border-slate-500"
+                >
                   <EyeIcon className="w-5 h-5" />
-                  Preview Sources
+                  {showAnalysis ? 'Hide' : 'Show'} Content Analysis
                 </Button>
               )}
             </div>
 
-            {/* Generated Document Editor */}
-            {generatedContent && (
-              <Card variant="glass" className="mt-6">
+            {/* Content Intelligence Panel */}
+            {showAnalysis && (contentAnalysis || documentSynthesis || contentGaps || isAnalyzing || isSynthesizing) && (
+              <Card variant="glass" className="border-blue-500/50">
                 <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center gap-2">
-                      <DocumentTextIcon className="w-5 h-5" />
-                      Generated Document
-                      {currentDocId && (
-                        <Badge variant="success" size="sm">
-                          Saved (ID: {currentDocId})
-                        </Badge>
-                      )}
-                    </CardTitle>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setIsEditing(!isEditing)}
-                      >
-                        {isEditing ? (
-                          <>
-                            <EyeIcon className="w-4 h-4" />
-                            Preview
-                          </>
-                        ) : (
-                          <>
-                            <CodeBracketIcon className="w-4 h-4" />
-                            Edit
-                          </>
-                        )}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => navigator.clipboard.writeText(generatedContent)}
-                      >
-                        Copy
-                      </Button>
-                      {isEditing && (
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          onClick={saveDocument}
-                          disabled={!currentDocId}
-                        >
-                          Save
-                        </Button>
-                      )}
-                    </div>
-                  </div>
+                  <CardTitle className="flex items-center gap-2">
+                    <SparklesIcon className="w-5 h-5 text-blue-500" />
+                    Content Intelligence Analysis
+                    {(isAnalyzing || isSynthesizing) && (
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent"></div>
+                    )}
+                  </CardTitle>
                   <CardDescription>
-                    {isEditing ? 'Edit the generated content in markdown format' : 'Preview of your generated document'}
+                    AI-powered analysis of your uploaded content with smart recommendations and synthesis
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {isEditing ? (
-                    <textarea
-                      value={generatedContent}
-                      onChange={(e) => setGeneratedContent(e.target.value)}
-                      className="w-full h-96 border border-white/40 dark:border-white/10 rounded-xl px-4 py-3 bg-white/70 dark:bg-white/5 backdrop-blur-md focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 font-mono text-sm"
-                      placeholder="Generated content will appear here..."
-                    />
-                  ) : (
-                    <div className="prose prose-gray dark:prose-invert max-w-none">
-                      <div className="bg-white/50 dark:bg-white/5 rounded-xl p-6 border border-white/40 dark:border-white/10">
-                        <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-gray-900 dark:text-gray-100">
-                          {generatedContent}
-                        </pre>
-                      </div>
+                  {/* Analysis Tabs */}
+                  <div className="mb-6">
+                    <div className="flex space-x-1 bg-white/10 dark:bg-black/10 rounded-lg p-1">
+                      <button
+                        onClick={() => setActiveAnalysisTab('analysis')}
+                        className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all ${
+                          activeAnalysisTab === 'analysis'
+                            ? 'bg-white/80 dark:bg-white/20 text-gray-900 dark:text-white shadow-sm'
+                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                        }`}
+                      >
+                        📄 Content Analysis
+                      </button>
+                      <button
+                        onClick={() => setActiveAnalysisTab('synthesis')}
+                        className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all ${
+                          activeAnalysisTab === 'synthesis'
+                            ? 'bg-white/80 dark:bg-white/20 text-gray-900 dark:text-white shadow-sm'
+                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                        }`}
+                        disabled={files.filter(f => f.status === 'uploaded').length < 2}
+                      >
+                        🔗 Document Synthesis
+                        {files.filter(f => f.status === 'uploaded').length < 2 && (
+                          <span className="ml-1 text-xs opacity-60">(2+ files)</span>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => setActiveAnalysisTab('gaps')}
+                        className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all ${
+                          activeAnalysisTab === 'gaps'
+                            ? 'bg-white/80 dark:bg-white/20 text-gray-900 dark:text-white shadow-sm'
+                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                        }`}
+                        disabled={files.filter(f => f.status === 'uploaded').length < 2}
+                      >
+                        🔍 Gap Analysis
+                        {files.filter(f => f.status === 'uploaded').length < 2 && (
+                          <span className="ml-1 text-xs opacity-60">(2+ files)</span>
+                        )}
+                      </button>
                     </div>
-                  )}
+                  </div>
+
+                  {/* Tab Content */}
+                  <div className="min-h-[300px]">
+                    {activeAnalysisTab === 'analysis' && (
+                      <div>
+                        {isAnalyzing ? (
+                          <div className="space-y-4">
+                            <Skeleton className="h-4 w-3/4" />
+                            <Skeleton className="h-4 w-1/2" />
+                            <div className="grid grid-cols-2 gap-4">
+                              <Skeleton className="h-20" />
+                              <Skeleton className="h-20" />
+                            </div>
+                            <div className="flex space-x-2">
+                              <Skeleton className="h-6 w-16" />
+                              <Skeleton className="h-6 w-20" />
+                              <Skeleton className="h-6 w-14" />
+                            </div>
+                          </div>
+                        ) : contentAnalysis && (
+                          <div className="space-y-6">
+                      {/* Template Recommendations */}
+                      {contentAnalysis.template_recommendations && (
+                        <div>
+                          <h4 className="font-medium text-gray-900 dark:text-white mb-3">
+                            🎯 Recommended Templates
+                          </h4>
+                          <div className="space-y-2">
+                            {contentAnalysis.template_recommendations.slice(0, 3).map((rec: any, index: number) => (
+                              <div key={rec.template_id} className="flex items-center justify-between p-3 rounded-lg bg-white/30 dark:bg-white/5">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant={index === 0 ? "default" : "outline"} size="sm">
+                                      {Math.round(rec.confidence * 100)}% match
+                                    </Badge>
+                                    <span className="font-medium text-gray-900 dark:text-white">
+                                      {templateCategories[Object.keys(templateCategories).find(cat => 
+                                        templateCategories[cat as keyof typeof templateCategories].some(t => t.id === rec.template_id)
+                                      ) as keyof typeof templateCategories]?.find(t => t.id === rec.template_id)?.name || rec.template_id}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                    {rec.reason}
+                                  </p>
+                                </div>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    for (const [categoryKey, templates] of Object.entries(templateCategories)) {
+                                      const foundTemplate = templates.find(t => t.id === rec.template_id);
+                                      if (foundTemplate) {
+                                        setSelectedCategory(categoryKey);
+                                        setSelectedTemplate(foundTemplate);
+                                        break;
+                                      }
+                                    }
+                                  }}
+                                >
+                                  Use Template
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Content Analysis */}
+                      {contentAnalysis.analysis && (
+                        <div className="grid md:grid-cols-2 gap-4">
+                          <div>
+                            <h4 className="font-medium text-gray-900 dark:text-white mb-3">
+                              📄 Document Analysis
+                            </h4>
+                            <div className="space-y-2 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-gray-600 dark:text-gray-400">Document Type:</span>
+                                <Badge variant="outline">
+                                  {contentAnalysis.analysis.document_type.replace('_', ' ')}
+                                </Badge>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600 dark:text-gray-400">Confidence:</span>
+                                <span className="font-medium">
+                                  {Math.round(contentAnalysis.analysis.confidence * 100)}%
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600 dark:text-gray-400">Word Count:</span>
+                                <span className="font-medium">
+                                  {contentAnalysis.analysis.metadata.word_count?.toLocaleString()}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600 dark:text-gray-400">Reading Time:</span>
+                                <span className="font-medium">
+                                  {contentAnalysis.analysis.metadata.estimated_reading_time} min
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <h4 className="font-medium text-gray-900 dark:text-white mb-3">
+                              🏗️ Content Structure
+                            </h4>
+                            <div className="space-y-2 text-sm">
+                              {contentAnalysis.analysis.content_structure.has_headings && (
+                                <Badge variant="success" size="sm">✓ Has Headings</Badge>
+                              )}
+                              {contentAnalysis.analysis.content_structure.has_lists && (
+                                <Badge variant="success" size="sm">✓ Has Lists</Badge>
+                              )}
+                              {contentAnalysis.analysis.content_structure.has_tables && (
+                                <Badge variant="success" size="sm">✓ Has Tables</Badge>
+                              )}
+                              {contentAnalysis.analysis.content_structure.has_code && (
+                                <Badge variant="success" size="sm">✓ Has Code</Badge>
+                              )}
+                              {contentAnalysis.analysis.content_structure.has_dates && (
+                                <Badge variant="success" size="sm">✓ Has Dates</Badge>
+                              )}
+                              {contentAnalysis.analysis.content_structure.has_numbers && (
+                                <Badge variant="success" size="sm">✓ Has Numbers</Badge>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Key Themes */}
+                      {contentAnalysis.analysis?.key_themes && contentAnalysis.analysis.key_themes.length > 0 && (
+                        <div>
+                          <h4 className="font-medium text-gray-900 dark:text-white mb-3">
+                            🔑 Key Themes
+                          </h4>
+                          <div className="flex flex-wrap gap-2">
+                            {contentAnalysis.analysis.key_themes.slice(0, 8).map((theme: string, index: number) => (
+                              <Badge key={index} variant="outline" size="sm">
+                                {theme}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Insights */}
+                      {contentAnalysis.insights && contentAnalysis.insights.length > 0 && (
+                        <div>
+                          <h4 className="font-medium text-gray-900 dark:text-white mb-3">
+                            💡 AI Insights
+                          </h4>
+                          <div className="space-y-2">
+                            {contentAnalysis.insights.map((insight: string, index: number) => (
+                              <div key={index} className="flex items-start gap-2 text-sm">
+                                <div className="w-2 h-2 rounded-full bg-blue-500 mt-2 flex-shrink-0"></div>
+                                <span className="text-gray-700 dark:text-gray-300">{insight}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Content Stats */}
+                      {contentAnalysis.content_stats && (
+                        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
+                          <h4 className="font-medium text-gray-900 dark:text-white mb-2">
+                            📊 Upload Statistics
+                          </h4>
+                          <div className="grid grid-cols-3 gap-4 text-sm text-center">
+                            <div>
+                              <div className="font-bold text-lg text-blue-600">
+                                {contentAnalysis.content_stats.total_files}
+                              </div>
+                              <div className="text-gray-600 dark:text-gray-400">Files</div>
+                            </div>
+                            <div>
+                              <div className="font-bold text-lg text-green-600">
+                                {contentAnalysis.content_stats.total_snippets}
+                              </div>
+                              <div className="text-gray-600 dark:text-gray-400">Chunks</div>
+                            </div>
+                            <div>
+                              <div className="font-bold text-lg text-purple-600">
+                                {contentAnalysis.content_stats.estimated_documents}
+                              </div>
+                              <div className="text-gray-600 dark:text-gray-400">Documents</div>
+                            </div>
+                          </div>
+                            {/* Template Recommendations */}
+                            {contentAnalysis.template_recommendations && (
+                              <div>
+                                <h4 className="font-medium text-gray-900 dark:text-white mb-3">
+                                  🎯 Recommended Templates
+                                </h4>
+                                <div className="space-y-2">
+                                  {contentAnalysis.template_recommendations.slice(0, 3).map((rec: any, index: number) => (
+                                    <div key={rec.template_id} className="flex items-center justify-between p-3 rounded-lg bg-white/30 dark:bg-white/5">
+                                      <div className="flex-1">
+                                        <div className="flex items-center gap-2">
+                                          <Badge variant={index === 0 ? "default" : "outline"} size="sm">
+                                            {Math.round(rec.confidence * 100)}% match
+                                          </Badge>
+                                          <span className="font-medium text-gray-900 dark:text-white">
+                                            {templateCategories[Object.keys(templateCategories).find(cat => 
+                                              templateCategories[cat as keyof typeof templateCategories].some(t => t.id === rec.template_id)
+                                            ) as keyof typeof templateCategories]?.find(t => t.id === rec.template_id)?.name || rec.template_id}
+                                          </span>
+                                        </div>
+                                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                          {rec.reason}
+                                        </p>
+                                      </div>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => {
+                                          for (const [categoryKey, templates] of Object.entries(templateCategories)) {
+                                            const foundTemplate = templates.find(t => t.id === rec.template_id);
+                                            if (foundTemplate) {
+                                              setSelectedCategory(categoryKey);
+                                              setSelectedTemplate(foundTemplate);
+                                              break;
+                                            }
+                                          }
+                                        }}
+                                      >
+                                        Use Template
+                                      </Button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Content Analysis Details */}
+                            {contentAnalysis.analysis && (
+                              <div className="grid md:grid-cols-2 gap-4">
+                                <div>
+                                  <h4 className="font-medium text-gray-900 dark:text-white mb-3">
+                                    📄 Document Analysis
+                                  </h4>
+                                  <div className="space-y-2 text-sm">
+                                    <div className="flex justify-between">
+                                      <span className="text-gray-600 dark:text-gray-400">Document Type:</span>
+                                      <Badge variant="outline">
+                                        {contentAnalysis.analysis.document_type.replace('_', ' ')}
+                                      </Badge>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span className="text-gray-600 dark:text-gray-400">Confidence:</span>
+                                      <span className="font-medium">
+                                        {Math.round(contentAnalysis.analysis.confidence * 100)}%
+                                      </span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span className="text-gray-600 dark:text-gray-400">Word Count:</span>
+                                      <span className="font-medium">
+                                        {contentAnalysis.analysis.metadata.word_count?.toLocaleString()}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                <div>
+                                  <h4 className="font-medium text-gray-900 dark:text-white mb-3">
+                                    🏗️ Content Structure
+                                  </h4>
+                                  <div className="flex flex-wrap gap-2">
+                                    {contentAnalysis.analysis.content_structure.has_headings && (
+                                      <Badge variant="success" size="sm">✓ Headings</Badge>
+                                    )}
+                                    {contentAnalysis.analysis.content_structure.has_lists && (
+                                      <Badge variant="success" size="sm">✓ Lists</Badge>
+                                    )}
+                                    {contentAnalysis.analysis.content_structure.has_tables && (
+                                      <Badge variant="success" size="sm">✓ Tables</Badge>
+                                    )}
+                                    {contentAnalysis.analysis.content_structure.has_code && (
+                                      <Badge variant="success" size="sm">✓ Code</Badge>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Key Themes */}
+                            {contentAnalysis.analysis?.key_themes && contentAnalysis.analysis.key_themes.length > 0 && (
+                              <div>
+                                <h4 className="font-medium text-gray-900 dark:text-white mb-3">
+                                  🔑 Key Themes
+                                </h4>
+                                <div className="flex flex-wrap gap-2">
+                                  {contentAnalysis.analysis.key_themes.slice(0, 8).map((theme: string, index: number) => (
+                                    <Badge key={index} variant="outline" size="sm">
+                                      {theme}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Document Synthesis Tab */}
+                    {activeAnalysisTab === 'synthesis' && (
+                      <div>
+                        {isSynthesizing ? (
+                          <div className="space-y-4">
+                            <Skeleton className="h-4 w-2/3" />
+                            <Skeleton className="h-16 w-full" />
+                            <div className="space-y-2">
+                              <Skeleton className="h-12" />
+                              <Skeleton className="h-12" />
+                              <Skeleton className="h-12" />
+                            </div>
+                          </div>
+                        ) : documentSynthesis ? (
+                          <div className="space-y-6">
+                            {documentSynthesis.status === 'single_file' ? (
+                              <div className="text-center py-8">
+                                <div className="text-gray-400 mb-4">
+                                  <SparklesIcon className="w-12 h-12 mx-auto" />
+                                </div>
+                                <p className="text-gray-600 dark:text-gray-400">{documentSynthesis.message}</p>
+                              </div>
+                            ) : (
+                              <>
+                                {/* Synthesis Summary */}
+                                {documentSynthesis.synthesis?.summary && (
+                                  <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
+                                    <h4 className="font-medium text-green-900 dark:text-green-100 mb-2">
+                                      📊 Synthesis Summary
+                                    </h4>
+                                    <p className="text-green-800 dark:text-green-200 text-sm">
+                                      {documentSynthesis.synthesis.summary}
+                                    </p>
+                                  </div>
+                                )}
+
+                                {/* Document Clusters */}
+                                {documentSynthesis.synthesis?.document_clusters && (
+                                  <div>
+                                    <h4 className="font-medium text-gray-900 dark:text-white mb-3">
+                                      🔗 Content Clusters
+                                    </h4>
+                                    <div className="space-y-3">
+                                      {documentSynthesis.synthesis.document_clusters.map((cluster: any, index: number) => (
+                                        <div key={index} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                                          <div className="flex items-center justify-between mb-2">
+                                            <h5 className="font-medium text-gray-900 dark:text-white">
+                                              {cluster.theme}
+                                            </h5>
+                                            <Badge variant={cluster.confidence > 0.7 ? "success" : cluster.confidence > 0.4 ? "warning" : "outline"} size="sm">
+                                              {Math.round(cluster.confidence * 100)}% confidence
+                                            </Badge>
+                                          </div>
+                                          <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                                            <span className="font-medium">{cluster.content_pieces}</span> pieces from{' '}
+                                            <span className="font-medium">{cluster.source_files.length}</span> files
+                                          </div>
+                                          <div className="flex flex-wrap gap-1 mb-2">
+                                            {cluster.source_files.map((file: string, idx: number) => (
+                                              <Badge key={idx} variant="outline" size="sm">
+                                                {file}
+                                              </Badge>
+                                            ))}
+                                          </div>
+                                          {cluster.relationships.length > 0 && (
+                                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                                              Relationships: {cluster.relationships.join(', ')}
+                                            </div>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        ) : (
+                          <EmptyState
+                            icon={SparklesIcon}
+                            title="No Synthesis Data"
+                            description="Upload multiple files to see document synthesis analysis"
+                          />
+                        )}
+                      </div>
+                    )}
+
+                    {/* Content Gaps Tab */}
+                    {activeAnalysisTab === 'gaps' && (
+                      <div>
+                        {isSynthesizing ? (
+                          <div className="space-y-4">
+                            <Skeleton className="h-4 w-1/2" />
+                            <div className="space-y-3">
+                              <Skeleton className="h-10" />
+                              <Skeleton className="h-10" />
+                              <Skeleton className="h-10" />
+                            </div>
+                            <Skeleton className="h-8 w-3/4" />
+                          </div>
+                        ) : contentGaps ? (
+                          <div className="space-y-6">
+                            {contentGaps.status === 'single_file' ? (
+                              <div className="text-center py-8">
+                                <div className="text-gray-400 mb-4">
+                                  <SparklesIcon className="w-12 h-12 mx-auto" />
+                                </div>
+                                <p className="text-gray-600 dark:text-gray-400">{contentGaps.message}</p>
+                              </div>
+                            ) : (
+                              <>
+                                {/* Content Gaps */}
+                                {contentGaps.gaps?.content_gaps && contentGaps.gaps.content_gaps.length > 0 && (
+                                  <div>
+                                    <h4 className="font-medium text-gray-900 dark:text-white mb-3">
+                                      🚨 Identified Gaps
+                                    </h4>
+                                    <div className="space-y-2">
+                                      {contentGaps.gaps.content_gaps.map((gap: string, index: number) => (
+                                        <div key={index} className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                                          <div className="w-2 h-2 rounded-full bg-amber-500 mt-2 flex-shrink-0"></div>
+                                          <span className="text-amber-800 dark:text-amber-200 text-sm">{gap}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Missing Content Types */}
+                                {contentGaps.gaps?.missing_content_types && contentGaps.gaps.missing_content_types.length > 0 && (
+                                  <div>
+                                    <h4 className="font-medium text-gray-900 dark:text-white mb-3">
+                                      📋 Missing Content Types
+                                    </h4>
+                                    <div className="flex flex-wrap gap-2">
+                                      {contentGaps.gaps.missing_content_types.map((type: string, index: number) => (
+                                        <Badge key={index} variant="destructive" size="sm">
+                                          Missing: {type}
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Recommendations */}
+                                {contentGaps.gaps?.recommendations && contentGaps.gaps.recommendations.length > 0 && (
+                                  <div>
+                                    <h4 className="font-medium text-gray-900 dark:text-white mb-3">
+                                      💡 Recommendations
+                                    </h4>
+                                    <div className="space-y-2">
+                                      {contentGaps.gaps.recommendations.map((rec: string, index: number) => (
+                                        <div key={index} className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                                          <div className="w-2 h-2 rounded-full bg-blue-500 mt-2 flex-shrink-0"></div>
+                                          <span className="text-blue-800 dark:text-blue-200 text-sm">{rec}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Improvement Suggestions */}
+                                {contentGaps.gaps?.improvement_suggestions && contentGaps.gaps.improvement_suggestions.length > 0 && (
+                                  <div>
+                                    <h4 className="font-medium text-gray-900 dark:text-white mb-3">
+                                      🔧 Improvement Suggestions
+                                    </h4>
+                                    <div className="space-y-2">
+                                      {contentGaps.gaps.improvement_suggestions.map((suggestion: string, index: number) => (
+                                        <div key={index} className="flex items-start gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                                          <div className="w-2 h-2 rounded-full bg-green-500 mt-2 flex-shrink-0"></div>
+                                          <span className="text-green-800 dark:text-green-200 text-sm">{suggestion}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        ) : (
+                          <EmptyState
+                            icon={MagnifyingGlassIcon}
+                            title="No Gap Analysis"
+                            description="Upload multiple files to see content gap analysis"
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             )}
+
+            {/* Streaming Visual Editor */}
+            {(generatedContent || isGenerating) && (
+              <div className="mt-6">
+                <StreamingRichTextEditor
+                  content={generatedContent}
+                  onChange={handleContentChange}
+                  isStreaming={isGenerating && !isStreamPaused}
+                  onPauseStream={pauseGeneration}
+                  onResumeStream={resumeGeneration}
+                  onStopStream={stopGeneration}
+                  streamingEnabled={true}
+                  placeholder={isGenerating ? "Document content will appear here as it's generated..." : "Start generating a document to see content here..."}
+                  title={title || "Untitled Document"}
+                />
+                {currentDocId && (
+                  <div className="mt-4 flex justify-center">
+                    <Button
+                      variant="outline"
+                      onClick={() => router.push(`/doc/${currentDocId}`)}
+                    >
+                      Open in Advanced Editor
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
+          </>
+        )}
+
+        {/* Team Management Tab */}
+        {activeTab === 'team' && (
+          <TeamManagement />
+        )}
+
+        {/* Shared Documents Tab */}
+        {activeTab === 'documents' && (
+          <SharedDocumentLibrary />
+        )}
       </main>
     </div>
   );
